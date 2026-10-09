@@ -6,8 +6,21 @@ import { useNavigate, Link } from 'react-router-dom';
 
 export const TopNavbar: React.FC = () => {
   const navigate = useNavigate();
-  const { role, setRole, language, setLanguage, smsAlerts, dismissSmsAlert, t } = useApp();
+  const {
+    role,
+    setRole,
+    authType,
+    currentUser,
+    logout,
+    language,
+    setLanguage,
+    smsAlerts,
+    dismissSmsAlert,
+    t,
+  } = useApp();
+
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [navSearch, setNavSearch] = useState('');
 
   const handleNavSearch = (e: React.FormEvent) => {
@@ -18,6 +31,11 @@ export const TopNavbar: React.FC = () => {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   const roles: Array<{ id: StaffRole; label: string; color: string }> = [
     { id: 'DOCTOR', label: t('role_doctor'), color: 'bg-teal-50 text-teal-700 border-teal-200' },
     { id: 'NURSE', label: t('role_nurse'), color: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -26,7 +44,7 @@ export const TopNavbar: React.FC = () => {
   ];
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 relative">
+    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 relative z-30">
       {/* Search / Context */}
       <div className="flex items-center gap-3 flex-1 max-w-md">
         <form onSubmit={handleNavSearch} className="relative w-full">
@@ -42,12 +60,12 @@ export const TopNavbar: React.FC = () => {
       </div>
 
       {/* Right Controls & Role / Language Selectors */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5 sm:gap-3">
         {/* Language Toggle */}
         <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
           <button
             onClick={() => setLanguage('en')}
-            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition ${
+            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
               language === 'en' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -55,7 +73,7 @@ export const TopNavbar: React.FC = () => {
           </button>
           <button
             onClick={() => setLanguage('hi')}
-            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition ${
+            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
               language === 'hi' ? 'bg-white text-teal-800 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -63,7 +81,7 @@ export const TopNavbar: React.FC = () => {
           </button>
           <button
             onClick={() => setLanguage('te')}
-            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition ${
+            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
               language === 'te' ? 'bg-white text-teal-800 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -71,26 +89,82 @@ export const TopNavbar: React.FC = () => {
           </button>
         </div>
 
-        {/* Staff Role Switcher */}
-        <div className="flex items-center gap-1.5">
-          <UserCheck className="w-3.5 h-3.5 text-slate-400 hidden sm:inline" />
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as StaffRole)}
-            className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-600"
-          >
-            {roles.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Role Badge / Switcher based on Auth Type */}
+        {authType === 'PATIENT' ? (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-800 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse"></span>
+            <span>Patient Pass</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <UserCheck className="w-3.5 h-3.5 text-slate-400 hidden sm:inline" />
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as StaffRole)}
+              className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-600 cursor-pointer"
+            >
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Hospital Indicator */}
         <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
           <Hospital className="w-3.5 h-3.5 text-teal-700" />
           <span className="font-medium text-slate-700">{t('hospital_ward')}</span>
+        </div>
+
+        {/* User Profile & Auth Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            className="flex items-center gap-2 p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+          >
+            <div className="w-7 h-7 rounded-full bg-teal-700 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+              {currentUser?.name ? currentUser.name.charAt(0) : 'U'}
+            </div>
+          </button>
+
+          {isUserMenuOpen && (
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="border-b border-slate-100 pb-2.5 mb-2">
+                <div className="font-bold text-slate-900 text-xs truncate">
+                  {currentUser?.name || 'Authenticated User'}
+                </div>
+                <div className="text-[11px] text-slate-500 truncate">
+                  {currentUser?.email || (currentUser?.uhid ? `UHID: ${currentUser.uhid}` : 'Authenticated')}
+                </div>
+                <div className="mt-1.5 inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                  {authType === 'PATIENT' ? 'Patient / Attendant Role' : `Hospital Staff (${role})`}
+                </div>
+              </div>
+
+              <div className="space-y-1 text-xs">
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    navigate('/login');
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-700 hover:bg-slate-50 hover:text-teal-700 font-medium transition cursor-pointer"
+                >
+                  🔄 {t('auth_switch_role')}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50 font-medium transition cursor-pointer"
+                >
+                  🚪 {t('auth_logout')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* SMS / Patient Alert Notification Bell */}

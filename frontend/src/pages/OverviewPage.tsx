@@ -16,7 +16,7 @@ import { analyticsService } from '../services/analyticsService';
 import { useApp } from '../context/AppContext';
 
 export const OverviewPage: React.FC = () => {
-  const { t, role } = useApp();
+  const { t, role, authType, currentUser } = useApp();
   const { data: analytics, isLoading } = useQuery({
     queryKey: ['analytics-overview'],
     queryFn: () => analyticsService.getOverview(),
@@ -30,6 +30,9 @@ export const OverviewPage: React.FC = () => {
   const totalRegistered = analytics?.total_registered_today ?? 0;
 
   const getRoleDescription = () => {
+    if (authType === 'PATIENT') {
+      return 'Patient Live Pass: Monitor your queue priority, estimated wait times, and consultation calls.';
+    }
     switch (role) {
       case 'DOCTOR':
         return t('role_desc_doctor');
@@ -56,7 +59,7 @@ export const OverviewPage: React.FC = () => {
               {t('overview_live_badge')}
             </span>
             <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-              {role}
+              {authType === 'PATIENT' ? 'Patient Portal' : role}
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -64,29 +67,45 @@ export const OverviewPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
-          <Link
-            to="/intake"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors shadow-sm"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            {t('btn_new_intake')}
-          </Link>
-          <Link
-            to="/queue"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
-          >
-            <Users className="w-3.5 h-3.5" />
-            {t('btn_view_queue')}
-          </Link>
+          {authType === 'PATIENT' ? (
+            <Link
+              to="/tracker"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors shadow-sm"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              {t('patient_my_token')}
+            </Link>
+          ) : (
+            <>
+              <Link
+                to="/intake"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors shadow-sm"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                {t('btn_new_intake')}
+              </Link>
+              <Link
+                to="/queue"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
+              >
+                <Users className="w-3.5 h-3.5" />
+                {t('btn_view_queue')}
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
       {/* Active Role Capability Banner */}
       <div className="bg-teal-50/70 border border-teal-200/80 rounded-lg p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-teal-900">{t('active_role_badge')}</span>
+          <span className="font-bold text-teal-900">
+            {authType === 'PATIENT' ? t('patient_greeting') : t('active_role_badge')}
+          </span>
           <span className="font-semibold text-teal-800 bg-teal-100 px-2 py-0.5 rounded text-[11px]">
-            {t(`role_${role.toLowerCase()}`)}
+            {authType === 'PATIENT'
+              ? currentUser?.name || 'Patient Attendant'
+              : t(`role_${role.toLowerCase()}`)}
           </span>
           <span className="text-teal-700 text-xs hidden md:inline">— {getRoleDescription()}</span>
         </div>

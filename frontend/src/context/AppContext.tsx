@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { StaffRole } from '../types';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { StaffRole, AuthType, AuthUser } from '../types';
+import { supabase } from '../lib/supabase';
 
 export type Language = 'en' | 'hi' | 'te';
 
@@ -20,6 +21,13 @@ export interface SMSAlert {
 interface AppContextType {
   role: StaffRole;
   setRole: (role: StaffRole) => void;
+  authType: AuthType;
+  setAuthType: (type: AuthType) => void;
+  currentUser: AuthUser | null;
+  loginWithGoogle: (targetRole: AuthType) => Promise<void>;
+  loginAsStaff: (staffRole: StaffRole, email?: string, name?: string) => void;
+  loginAsPatient: (uhidOrPhone: string, name?: string) => void;
+  logout: () => void;
   language: Language;
   setLanguage: (lang: Language) => void;
   smsAlerts: SMSAlert[];
@@ -251,6 +259,26 @@ const translations: Record<Language, Record<string, string>> = {
     tracker_proceed_room: 'Please proceed directly to Consultation Room now!',
     tracker_waiting_msg: 'You are currently in the prioritised queue. We will notify you via SMS when called.',
     tracker_completed_msg: 'Your consultation session has been successfully completed.',
+
+    // Authentication & Role Switcher
+    auth_login_title: 'Sign In to SehatSetu',
+    auth_login_subtitle: 'Select your role to access hospital operations or your live patient digital pass.',
+    auth_tab_staff: 'Hospital Staff',
+    auth_tab_patient: 'Patient / Attendant',
+    auth_google_btn: 'Continue with Google',
+    auth_quick_demo: '1-Click Quick Demo Login:',
+    auth_doctor_login: 'Login as Doctor (ER/OPD)',
+    auth_nurse_login: 'Login as Triage Nurse',
+    auth_admin_login: 'Login as Hospital Admin',
+    auth_patient_demo_btn: 'Login as Sample Patient (Aarav Sharma)',
+    auth_logout: 'Sign Out',
+    auth_switch_role: 'Switch Role Mode',
+    patient_portal_title: 'Patient Care & Queue Portal',
+    patient_my_token: 'My Live Token Pass',
+    patient_departments: 'Hospital Specialties',
+    patient_guidelines: 'Care Guidelines',
+    patient_emergency: '24x7 Emergency Contact',
+    patient_greeting: 'Welcome back,',
   },
   hi: {
     // Navigation & App Header
@@ -460,6 +488,25 @@ const translations: Record<Language, Record<string, string>> = {
     tracker_proceed_room: 'कृपया तुरंत परामर्श कक्ष में उपस्थित हों!',
     tracker_waiting_msg: 'आप वर्तमान में प्राथमिकता कतार में हैं। बुलाए जाने पर आपको एसएमएस प्राप्त होगा।',
     tracker_completed_msg: 'आपका परामर्श सत्र सफलतापूर्वक संपन्न हो चुका है।',
+    // Authentication & Role Switcher (Hindi)
+    auth_login_title: 'सेहत सेतु में साइन इन करें',
+    auth_login_subtitle: 'अस्पताल संचालन या अपने लाइव रोगी डिजिटल पास के लिए अपनी भूमिका चुनें।',
+    auth_tab_staff: 'अस्पताल कर्मचारी (Staff)',
+    auth_tab_patient: 'रोगी / परिचारक (Patient)',
+    auth_google_btn: 'Google के साथ जारी रखें',
+    auth_quick_demo: '1-क्लिक त्वरित डेमो लॉगिन:',
+    auth_doctor_login: 'चिकित्सक (Doctor ER/OPD) के रूप में लॉगिन',
+    auth_nurse_login: 'ट्राइएज नर्स के रूप में लॉगिन',
+    auth_admin_login: 'अस्पताल प्रशासक (Admin) के रूप में लॉगिन',
+    auth_patient_demo_btn: 'नमूना रोगी (आरव शर्मा) के रूप में लॉगिन',
+    auth_logout: 'साइन आउट करें',
+    auth_switch_role: 'भूमिका मोड बदलें',
+    patient_portal_title: 'रोगी सेवा एवं कतार पोर्टल',
+    patient_my_token: 'मेरा लाइव टोकन पास',
+    patient_departments: 'अस्पताल विशेषज्ञताएं',
+    patient_guidelines: 'देखभाल दिशानिर्देश',
+    patient_emergency: '24x7 आपातकालीन संपर्क',
+    patient_greeting: 'स्वागत है,',
   },
   te: {
     // Navigation & App Header (తెలుగు)
@@ -669,6 +716,26 @@ const translations: Record<Language, Record<string, string>> = {
     tracker_proceed_room: 'దయచేసి వెంటనే కన్సల్టేషన్ రూమ్‌కు వెళ్లండి!',
     tracker_waiting_msg: 'మీరు ప్రస్తుతం ప్రాధాన్యత క్యూలో ఉన్నారు. పిలిచినప్పుడు మీకు SMS అందుతుంది.',
     tracker_completed_msg: 'మీ కన్సల్టేషన్ విజయవంతంగా పూర్తయింది.',
+
+    // Authentication & Role Switcher (Telugu)
+    auth_login_title: 'సేహత్‌సేతు లోకి సైన్ ఇన్ చేయండి',
+    auth_login_subtitle: 'ఆసుపత్రి కార్యకలాపాలు లేదా మీ లైవ్ పేషెంట్ డిజిటల్ పాస్ కోసం మీ పాత్రను ఎంచుకోండి.',
+    auth_tab_staff: 'హాస్పిటల్ సిబ్బంది (Staff)',
+    auth_tab_patient: 'రోగి / అటెండెంట్ (Patient)',
+    auth_google_btn: 'Google తో కొనసాగించండి',
+    auth_quick_demo: '1-క్లిక్ శీఘ్ర డెమో లాగిన్:',
+    auth_doctor_login: 'వైద్యుడు (Doctor ER/OPD) గా లాగిన్',
+    auth_nurse_login: 'ట్రయాజ్ నర్స్‌గా లాగిన్',
+    auth_admin_login: 'హాస్పిటల్ అడ్మిన్‌గా లాగిన్',
+    auth_patient_demo_btn: 'నమూనా రోగి (ఆరవ్ శర్మ) గా లాగిన్',
+    auth_logout: 'సైన్ అవుట్ చేయండి',
+    auth_switch_role: 'పాత్ర మోడ్ మార్చండి',
+    patient_portal_title: 'పేషెంట్ కేర్ & క్యూ పోర్టల్',
+    patient_my_token: 'నా లైవ్ టోకెన్ పాస్',
+    patient_departments: 'హాస్పిటల్ విభాగాలు',
+    patient_guidelines: 'సంరక్షణ మార్గదర్శకాలు',
+    patient_emergency: '24x7 అత్యవసర సంప్రదింపు',
+    patient_greeting: 'స్వాగతం,',
   },
 };
 
@@ -710,9 +777,167 @@ function playHospitalChime() {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [role, setRole] = useState<StaffRole>('DOCTOR');
-  const [language, setLanguage] = useState<Language>('en');
+  const [role, setRoleState] = useState<StaffRole>(() => {
+    return (localStorage.getItem('sehatsetu_staff_role') as StaffRole) || 'DOCTOR';
+  });
+
+  const [authType, setAuthTypeState] = useState<AuthType>(() => {
+    return (localStorage.getItem('sehatsetu_auth_type') as AuthType) || 'STAFF';
+  });
+
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    const saved = localStorage.getItem('sehatsetu_current_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return {
+      id: 'staff-demo-doctor',
+      name: 'Dr. Sameer Khan',
+      userRole: 'STAFF',
+      staffRole: 'DOCTOR',
+      email: 'dr.sameer@sehatsetu.org',
+    };
+  });
+
+  const [language, setLanguage] = useState<Language>(() => {
+    return (localStorage.getItem('sehatsetu_language') as Language) || 'en';
+  });
+
   const [smsAlerts, setSmsAlerts] = useState<SMSAlert[]>([]);
+
+  // Keep localStorage updated
+  const setRole = (newRole: StaffRole) => {
+    setRoleState(newRole);
+    localStorage.setItem('sehatsetu_staff_role', newRole);
+    if (currentUser && currentUser.userRole === 'STAFF') {
+      const updated: AuthUser = { ...currentUser, staffRole: newRole };
+      setCurrentUser(updated);
+      localStorage.setItem('sehatsetu_current_user', JSON.stringify(updated));
+    }
+  };
+
+  const setAuthType = (type: AuthType) => {
+    setAuthTypeState(type);
+    localStorage.setItem('sehatsetu_auth_type', type);
+  };
+
+  const handleSetLanguage = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('sehatsetu_language', lang);
+  };
+
+  // Google OAuth via Supabase with graceful demo fallback
+  const loginWithGoogle = async (targetRole: AuthType): Promise<void> => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (error) {
+        console.warn('[Supabase OAuth Notice] Falling back to instant demo session:', error.message);
+        // Fallback to instant mock Google session
+        if (targetRole === 'PATIENT') {
+          loginAsPatient('UHID-2026-0089', 'Google User (Patient)');
+        } else {
+          loginAsStaff('DOCTOR', 'doctor.google@sehatsetu.org', 'Dr. Google Clinician');
+        }
+      }
+    } catch (err) {
+      console.warn('[Supabase Auth Fallback] Initiating direct authenticated session:', err);
+      if (targetRole === 'PATIENT') {
+        loginAsPatient('UHID-2026-0089', 'Google User (Patient)');
+      } else {
+        loginAsStaff('DOCTOR', 'doctor.google@sehatsetu.org', 'Dr. Google Clinician');
+      }
+    }
+  };
+
+  const loginAsStaff = (staffRole: StaffRole, email?: string, name?: string) => {
+    let staffName = name;
+    if (!staffName) {
+      if (staffRole === 'DOCTOR') staffName = 'Dr. Sameer Khan';
+      else if (staffRole === 'NURSE') staffName = 'Staff Nurse Priya Sharma';
+      else if (staffRole === 'REGISTRATION') staffName = 'Intake Officer Ramesh Patel';
+      else staffName = 'Medical Superintendant Rajesh Verma';
+    }
+
+    const user: AuthUser = {
+      id: `staff-${staffRole.toLowerCase()}-${Date.now().toString(36)}`,
+      name: staffName,
+      email: email || `${staffRole.toLowerCase()}@sehatsetu.org`,
+      userRole: 'STAFF',
+      staffRole,
+    };
+
+    setAuthType('STAFF');
+    setRole(staffRole);
+    setCurrentUser(user);
+    localStorage.setItem('sehatsetu_auth_type', 'STAFF');
+    localStorage.setItem('sehatsetu_staff_role', staffRole);
+    localStorage.setItem('sehatsetu_current_user', JSON.stringify(user));
+  };
+
+  const loginAsPatient = (uhidOrPhone: string, name?: string) => {
+    const isUhid = uhidOrPhone.toUpperCase().startsWith('UHID-') || uhidOrPhone.includes('-');
+    const user: AuthUser = {
+      id: `patient-${Date.now().toString(36)}`,
+      name: name || (isUhid ? 'Aarav Sharma' : 'Patient Attendant'),
+      uhid: isUhid ? uhidOrPhone.toUpperCase() : 'UHID-2026-0089',
+      phone: !isUhid ? uhidOrPhone : '+91-9876543210',
+      userRole: 'PATIENT',
+      email: 'patient@sehatsetu.org',
+    };
+
+    setAuthType('PATIENT');
+    setCurrentUser(user);
+    localStorage.setItem('sehatsetu_auth_type', 'PATIENT');
+    localStorage.setItem('sehatsetu_current_user', JSON.stringify(user));
+  };
+
+  const logout = () => {
+    supabase.auth.signOut().catch(() => {});
+    setCurrentUser(null);
+    localStorage.removeItem('sehatsetu_current_user');
+  };
+
+  // Supabase Auth State Change Listener
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const metadata = session.user.user_metadata || {};
+        const userName = metadata.full_name || metadata.name || session.user.email?.split('@')[0] || 'Authenticated User';
+        const currentSavedType = (localStorage.getItem('sehatsetu_auth_type') as AuthType) || 'STAFF';
+
+        const user: AuthUser = {
+          id: session.user.id,
+          name: userName,
+          email: session.user.email,
+          avatarUrl: metadata.avatar_url || metadata.picture,
+          userRole: currentSavedType,
+          staffRole: currentSavedType === 'STAFF' ? role : undefined,
+          uhid: currentSavedType === 'PATIENT' ? 'UHID-2026-0089' : undefined,
+        };
+
+        setCurrentUser(user);
+        localStorage.setItem('sehatsetu_current_user', JSON.stringify(user));
+      }
+    });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
+  }, [role]);
 
   const triggerRegistrationAlert = (
     uhid: string,
@@ -791,8 +1016,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       value={{
         role,
         setRole,
+        authType,
+        setAuthType,
+        currentUser,
+        loginWithGoogle,
+        loginAsStaff,
+        loginAsPatient,
+        logout,
         language,
-        setLanguage,
+        setLanguage: handleSetLanguage,
         smsAlerts,
         triggerRegistrationAlert,
         triggerCallAlert,

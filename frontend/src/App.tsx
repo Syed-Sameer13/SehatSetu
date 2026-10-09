@@ -10,6 +10,8 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { AuditPage } from './pages/AuditPage';
 import { PatientTrackerPage } from './pages/PatientTrackerPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { LoginPage } from './pages/LoginPage';
+import { useApp } from './context/AppContext';
 
 // Configure TanStack Query Client
 const queryClient = new QueryClient({
@@ -21,20 +23,61 @@ const queryClient = new QueryClient({
   },
 });
 
+// Staff Route Guard: redirects patients to their Live Tracker
+const StaffRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { authType } = useApp();
+  if (authType === 'PATIENT') {
+    return <Navigate to="/tracker" replace />;
+  }
+  return <>{children}</>;
+};
+
 export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AppProvider>
         <BrowserRouter>
           <Routes>
+            {/* Standalone Authentication Page */}
+            <Route path="/login" element={<LoginPage />} />
+
+            {/* Dashboard Application Shell */}
             <Route path="/" element={<DashboardLayout />}>
               <Route index element={<OverviewPage />} />
-              <Route path="intake" element={<IntakePage />} />
-              <Route path="queue" element={<QueuePage />} />
+              <Route
+                path="intake"
+                element={
+                  <StaffRoute>
+                    <IntakePage />
+                  </StaffRoute>
+                }
+              />
+              <Route
+                path="queue"
+                element={
+                  <StaffRoute>
+                    <QueuePage />
+                  </StaffRoute>
+                }
+              />
               <Route path="tracker" element={<PatientTrackerPage />} />
               <Route path="track" element={<PatientTrackerPage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
-              <Route path="audit" element={<AuditPage />} />
+              <Route
+                path="analytics"
+                element={
+                  <StaffRoute>
+                    <AnalyticsPage />
+                  </StaffRoute>
+                }
+              />
+              <Route
+                path="audit"
+                element={
+                  <StaffRoute>
+                    <AuditPage />
+                  </StaffRoute>
+                }
+              />
               <Route path="404" element={<NotFoundPage />} />
               <Route path="*" element={<Navigate to="/404" replace />} />
             </Route>

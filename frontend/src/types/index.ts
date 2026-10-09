@@ -7,6 +7,20 @@ export type VisitStatus = 'WAITING' | 'CALLED' | 'IN_CONSULTATION' | 'COMPLETED'
 // Staff Roles
 export type StaffRole = 'ADMIN' | 'DOCTOR' | 'NURSE' | 'REGISTRATION';
 
+// High-level Auth Personas
+export type AuthType = 'STAFF' | 'PATIENT';
+
+export interface AuthUser {
+  id: string;
+  email?: string;
+  name: string;
+  userRole: AuthType;
+  staffRole?: StaffRole;
+  uhid?: string;
+  avatarUrl?: string;
+  phone?: string;
+}
+
 // Gender
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 
