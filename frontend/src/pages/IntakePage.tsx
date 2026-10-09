@@ -5,7 +5,8 @@ import * as z from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { fetchDepartments } from '../services/departmentService';
 import { submitPatientIntake } from '../services/patientService';
-import { PatientIntakePayload, PatientIntakeData } from '../types';
+import { PatientIntakePayload, PatientIntakeData, AISummarizeResponse } from '../types';
+import { aiService } from '../services/aiService';
 import { StatusBadge } from '../components/common/StatusBadge';
 import {
   UserPlus,
@@ -102,6 +103,24 @@ export const IntakePage: React.FC = () => {
   // Watch vital values for live preview calculation
   const watchedVitals = watch('vital_observations');
   const watchedComplaint = watch('chief_complaint');
+
+  const [aiSummary, setAiSummary] = useState<AISummarizeResponse | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+
+  const handleGenerateAiSummary = async () => {
+    if (!watchedComplaint || watchedComplaint.trim().length < 3) return;
+    setIsAiLoading(true);
+    try {
+      const res = await aiService.summarizeSymptoms({
+        chief_complaint: watchedComplaint,
+      });
+      setAiSummary(res);
+    } catch (e) {
+      console.error('Failed to generate AI summary:', e);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   // Submit Mutation
   const intakeMutation = useMutation({
@@ -393,9 +412,20 @@ export const IntakePage: React.FC = () => {
 
         {/* Section 2: Chief Complaints */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="border-b border-slate-100 pb-3">
-            <h3 className="text-sm font-bold text-slate-900">2. Symptoms & Chief Complaint</h3>
-            <p className="text-xs text-slate-500">Record direct patient statements, timeline, and aggravating factors.</p>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">2. Symptoms & Chief Complaint</h3>
+              <p className="text-xs text-slate-500">Record direct patient statements, timeline, and aggravating factors.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateAiSummary}
+              disabled={isAiLoading || !watchedComplaint || watchedComplaint.trim().length < 3}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition disabled:opacity-50"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isAiLoading ? 'animate-spin' : ''}`} />
+              {isAiLoading ? 'Analyzing...' : 'AI Summary Assistant'}
+            </button>
           </div>
 
           <div>
@@ -409,6 +439,24 @@ export const IntakePage: React.FC = () => {
               <p className="text-[11px] text-red-600 mt-1">{errors.chief_complaint.message}</p>
             )}
           </div>
+
+          {aiSummary && (
+            <div className="bg-indigo-50/70 border border-indigo-200 p-3.5 rounded-lg text-indigo-950 space-y-2 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold flex items-center gap-1.5 text-indigo-900">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  Structured Clinical Extract
+                </span>
+                <span className="text-[10px] text-indigo-600 font-medium">Model: {aiSummary.model}</span>
+              </div>
+              <div className="whitespace-pre-line text-xs leading-relaxed text-indigo-900">
+                {aiSummary.summary}
+              </div>
+              <div className="text-[10px] text-indigo-700 italic pt-1 border-t border-indigo-200/50">
+                {aiSummary.safety_disclaimer}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Section 3: Vital Observations */}

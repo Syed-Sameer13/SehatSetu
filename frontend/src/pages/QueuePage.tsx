@@ -6,6 +6,8 @@ import { QueueEntry, UrgencyCategory, VisitStatus } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
+import { aiService } from '../services/aiService';
+import { AISummarizeResponse } from '../types';
 import {
   Users,
   Bell,
@@ -18,6 +20,7 @@ import {
   ChevronRight,
   X,
   Search,
+  Sparkles,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -32,6 +35,28 @@ export const QueuePage: React.FC = () => {
   const [overrideCategory, setOverrideCategory] = useState<UrgencyCategory>('HIGH');
   const [overrideReason, setOverrideReason] = useState<string>('');
   const [callFeedback, setCallFeedback] = useState<string | null>(null);
+  const [aiSummary, setAiSummary] = useState<AISummarizeResponse | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+
+  const handleOpenPatientReview = (entry: QueueEntry) => {
+    setSelectedPatient(entry);
+    setAiSummary(null);
+  };
+
+  const handleGenerateAiSummary = async () => {
+    if (!selectedPatient) return;
+    setIsAiLoading(true);
+    try {
+      const res = await aiService.summarizeSymptoms({
+        chief_complaint: selectedPatient.chief_complaint,
+      });
+      setAiSummary(res);
+    } catch (e) {
+      console.error('Failed to generate AI summary:', e);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   // Fetch departments
   const { data: departments } = useQuery({
@@ -260,7 +285,7 @@ export const QueuePage: React.FC = () => {
                 {filteredQueue.map((entry, idx) => (
                   <tr
                     key={entry.visit_id}
-                    onClick={() => setSelectedPatient(entry)}
+                    onClick={() => handleOpenPatientReview(entry)}
                     className={`hover:bg-teal-50/40 transition-colors cursor-pointer ${
                       entry.urgency_category === 'CRITICAL' ? 'bg-red-50/20' : ''
                     }`}
@@ -315,7 +340,7 @@ export const QueuePage: React.FC = () => {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedPatient(entry);
+                          handleOpenPatientReview(entry);
                         }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 rounded transition-colors"
                       >
@@ -412,6 +437,43 @@ export const QueuePage: React.FC = () => {
               <div>
                 <span className="font-bold text-slate-900">Reported Symptoms:</span>
                 <p className="text-slate-700 mt-1 leading-relaxed">{selectedPatient.chief_complaint}</p>
+              </div>
+
+              {/* AI Clinical Extractive Summary Card */}
+              <div className="border-t border-slate-200 pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    <span className="font-bold text-slate-900">AI Clinical Summary Assistant</span>
+                  </div>
+                  {!aiSummary && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateAiSummary}
+                      disabled={isAiLoading}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition disabled:opacity-60"
+                    >
+                      <Sparkles className={`w-3 h-3 ${isAiLoading ? 'animate-spin' : ''}`} />
+                      {isAiLoading ? 'Analyzing...' : 'Generate AI Summary'}
+                    </button>
+                  )}
+                </div>
+
+                {aiSummary ? (
+                  <div className="bg-indigo-50/70 border border-indigo-200 p-3 rounded-md text-indigo-950 space-y-1.5 animate-in fade-in duration-150">
+                    <div className="whitespace-pre-line text-xs leading-relaxed font-medium">
+                      {aiSummary.summary}
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-indigo-200/50 text-[10px] text-indigo-700">
+                      <span>Model: {aiSummary.model}</span>
+                      <span className="italic">{aiSummary.safety_disclaimer}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400">
+                    Click generate to produce an extractive structured summary of primary symptoms, duration, and aggravating factors.
+                  </p>
+                )}
               </div>
 
               <div className="border-t border-slate-200 pt-2">

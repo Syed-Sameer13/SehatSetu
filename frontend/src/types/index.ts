@@ -159,3 +159,42 @@ export interface HealthStatus {
   environment: string;
   timestamp: string;
 }
+
+// Analytics Interfaces
+export interface DepartmentLoadStat {
+  department_id: string;
+  department_name: string;
+  waiting_count: number;
+  in_consultation_count: number;
+  completed_today: number;
+  avg_wait_minutes: number;
+}
+
+export interface HourlyArrivalStat {
+  hour_label: string;
+  patient_count: number;
+}
+
+export interface AnalyticsOverview {
+  total_registered_today: number;
+  currently_waiting: number;
+  in_consultation: number;
+  completed_today: number;
+  average_wait_time_minutes: number;
+  urgency_distribution: Record<UrgencyCategory, number>;
+  department_load: DepartmentLoadStat[];
+  hourly_intake_trend: HourlyArrivalStat[];
+}
+
+// AI Summarization Interfaces
+export interface AISummarizeRequest {
+  chief_complaint: string;
+}
+
+export interface AISummarizeResponse {
+  summary: string;
+  is_ai_generated: boolean;
+  model: string;
+  safety_disclaimer: string;
+}
+

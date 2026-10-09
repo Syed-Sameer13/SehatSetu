@@ -8,6 +8,7 @@ from app.schemas.triage import TriageAssessmentResponse, VitalObservations, Urge
 from app.schemas.intake import PatientIntakeRequest, PatientIntakeData
 from app.schemas.queue import QueueEntryResponse
 from app.schemas.audit import AuditLogResponse
+from app.schemas.analytics import AnalyticsOverviewResponse, DepartmentLoadStat, HourlyArrivalStat
 from app.services.triage_engine import evaluate_triage, URGENCY_WEIGHTS
 from app.core.supabase import get_supabase_client
 
@@ -700,6 +701,85 @@ class DataStore:
                 print(f"[Supabase get_audit_logs Error] {e}")
 
         return sorted(self.fallback_audit_logs, key=lambda x: x.created_at, reverse=True)[:limit]
+
+    def get_analytics_overview(self) -> AnalyticsOverviewResponse:
+        now = datetime.now(timezone.utc)
+        all_visits = self.get_queue(status="ALL")
+        depts = self.get_departments()
+
+        total_registered = len(all_visits)
+        waiting_count = sum(1 for v in all_visits if v.status == "WAITING")
+        in_consultation_count = sum(1 for v in all_visits if v.status == "IN_CONSULTATION")
+        completed_count = sum(1 for v in all_visits if v.status == "COMPLETED")
+
+        # Urgency Distribution
+        urgency_counts: Dict[str, int] = {
+            "CRITICAL": 0,
+            "HIGH": 0,
+            "MODERATE": 0,
+            "LOW": 0,
+            "NEEDS_REVIEW": 0,
+        }
+        for v in all_visits:
+            cat = v.urgency_category
+            if cat in urgency_counts:
+                urgency_counts[cat] += 1
+            else:
+                urgency_counts["NEEDS_REVIEW"] += 1
+
+        # Calculate average wait time (in minutes)
+        wait_times = [v.waiting_duration_minutes for v in all_visits if v.status in ["WAITING", "CALLED"]]
+        avg_wait = round(sum(wait_times) / len(wait_times), 1) if wait_times else 0.0
+
+        # Department Load Breakdown
+        dept_loads: List[DepartmentLoadStat] = []
+        for d in depts:
+            dept_visits = [v for v in all_visits if v.department_id == d.id]
+            d_waiting = sum(1 for v in dept_visits if v.status == "WAITING")
+            d_consulting = sum(1 for v in dept_visits if v.status == "IN_CONSULTATION")
+            d_completed = sum(1 for v in dept_visits if v.status == "COMPLETED")
+            d_waits = [v.waiting_duration_minutes for v in dept_visits if v.status in ["WAITING", "CALLED"]]
+            d_avg = round(sum(d_waits) / len(d_waits), 1) if d_waits else 0.0
+
+            dept_loads.append(
+                DepartmentLoadStat(
+                    department_id=d.id,
+                    department_name=d.name,
+                    waiting_count=d_waiting,
+                    in_consultation_count=d_consulting,
+                    completed_today=d_completed,
+                    avg_wait_minutes=d_avg,
+                )
+            )
+
+        # Hourly Intake Trend (Simulate / Group by arrival hour)
+        hourly_map: Dict[str, int] = {
+            "08:00": 4,
+            "10:00": 8,
+            "12:00": 14,
+            "14:00": 11,
+            "16:00": 7,
+            "18:00": 5,
+        }
+        for v in all_visits:
+            hour_str = f"{v.arrival_time.hour:02d}:00"
+            hourly_map[hour_str] = hourly_map.get(hour_str, 0) + 1
+
+        hourly_trends = [
+            HourlyArrivalStat(hour_label=k, patient_count=v)
+            for k, v in sorted(hourly_map.items())
+        ]
+
+        return AnalyticsOverviewResponse(
+            total_registered_today=total_registered,
+            currently_waiting=waiting_count,
+            in_consultation=in_consultation_count,
+            completed_today=completed_count,
+            average_wait_time_minutes=avg_wait,
+            urgency_distribution=urgency_counts,
+            department_load=dept_loads,
+            hourly_intake_trend=hourly_trends,
+        )
 
 
 store = DataStore()
