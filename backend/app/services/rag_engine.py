@@ -31,7 +31,7 @@ STATIC_HOSPITAL_DOCUMENTS: List[RAGDocument] = [
             "• Emergency Department (ER): Operates 24 hours a day, 7 days a week (24x7) on the Ground Floor.\n"
             "• Outpatient Department (OPD): Registration and consultation hours are Monday through Saturday, 8:00 AM to 4:00 PM.\n"
             "• Hospital General Helpdesk Phone: 011-2399-4400.\n"
-            "• Pharmacy: Ground Floor adjacent to Emergency Entrance (Open 24x7 for urgent medications).\n"
+            "• Pharmacy (Medicines): Ground Floor adjacent to Emergency Entrance (Open 24x7 for urgent medications).\n"
             "• Diagnostic Pathology Lab & Blood Collection: Room 103, Ground Floor (8:00 AM - 6:00 PM).\n"
             "• Wheelchair & Stretcher Assistance: Available at Main Reception Entrance Gate 1.\n"
             "• Cafeteria & Attendant Refreshments: Basement Wing B."
@@ -60,7 +60,7 @@ STATIC_HOSPITAL_DOCUMENTS: List[RAGDocument] = [
         content=(
             "SehatSetu Deterministic Triage Prioritization Protocol:\n"
             "Patients in the queue are ordered dynamically by Clinical Urgency Score and Arrival Duration:\n"
-            "• Why was someone called before me? Patients with life-threatening vitals (e.g. critically low oxygen, severe tachycardia, acute chest distress) receive higher triage urgency scores and must be attended to immediately by doctors to save lives.\n"
+            "• Why was someone called before me? Patients with life-threatening vitals (e.g. critically low oxygen SpO2 < 90%, severe tachycardia HR > 120 bpm, acute cardiac chest pain) receive higher triage urgency scores and must be attended to immediately by doctors to save lives.\n"
             "• Urgency Categories:\n"
             "  1. CRITICAL: Urgency Score 90-100. Immediate doctor evaluation (e.g., SpO2 < 90%, GCS ≤ 8, severe cardiac distress, unresponsive).\n"
             "  2. HIGH: Urgency Score 70-89. Urgent care indicated, ~10-15 min estimated wait (e.g., SpO2 90-93%, Heart Rate > 120 bpm, high fever with severe pain).\n"
@@ -185,13 +185,11 @@ def get_department_room_string(dept_name: str, lang: str = "en") -> str:
 def build_dynamic_patient_chunks() -> List[RAGDocument]:
     """
     Dynamically generates structured RAG document chunks for every active patient and visit in the system.
-    Includes real-time queue position, triage urgency, vital observations, doctor room, and arrival stats.
     """
     all_entries = store.get_queue(status="ALL")
     patient_docs: List[RAGDocument] = []
 
     for entry in all_entries:
-        # Calculate rank among WAITING patients in the same department
         dept_waiting = [e for e in all_entries if e.department_id == entry.department_id and e.status == "WAITING"]
         rank = 1
         for idx, e in enumerate(dept_waiting):
@@ -224,7 +222,6 @@ def build_dynamic_patient_chunks() -> List[RAGDocument]:
             vitals_list.append(f"GCS: {v.gcs}/15")
         vitals_text = ", ".join(vitals_list) if vitals_list else "Standard baseline recorded"
 
-        # Build comprehensive document text
         content = (
             f"Official Patient Token Record:\n"
             f"• Token ID / UHID: {entry.uhid}\n"
@@ -308,7 +305,7 @@ def build_dynamic_department_snapshots() -> List[RAGDocument]:
             f"• Patients Waiting in Queue: {waiting_count}\n"
             f"• Patients Currently Called / In Consultation: {called_count + in_consult_count}\n"
             f"• Estimated Average Wait Time for New Registrations: ~{est_max_wait} minutes\n"
-            f"• Description: {d.description}"
+            f"• Department Description: {d.description or 'Specialist care unit'}"
         )
 
         snapshot_docs.append(
@@ -322,6 +319,7 @@ def build_dynamic_department_snapshots() -> List[RAGDocument]:
                     "department_name": d.name,
                     "waiting_count": waiting_count,
                     "in_consultation_count": in_consult_count,
+                    "called_count": called_count,
                     "estimated_wait": est_max_wait,
                     "room": room_str,
                 },
@@ -330,10 +328,9 @@ def build_dynamic_department_snapshots() -> List[RAGDocument]:
 
         dept_summaries.append(f"• {d.name} ({room_str}): {waiting_count} waiting (~{est_max_wait} min wait)")
 
-    # Global Hospital Summary Document
     global_content = (
         f"Civil Hospital Ward A Live Operations Overview:\n"
-        f"• Total Patients Waiting: {total_waiting}\n"
+        f"• Total Patients Waiting across all departments: {total_waiting}\n"
         f"• Total Active Consultations: {total_in_consult}\n"
         f"• Department Breakdowns:\n" + "\n".join(dept_summaries)
     )
@@ -354,7 +351,6 @@ def build_dynamic_department_snapshots() -> List[RAGDocument]:
 class HospitalRAGRetriever:
     """
     Hybrid RAG Vector & Keyword Search Engine for Hospital Operations and Patient Records.
-    Computes TF-IDF vector embeddings, n-gram lexical overlap, and exact token/name matching.
     """
 
     def __init__(self):
@@ -386,13 +382,11 @@ class HospitalRAGRetriever:
         self,
         query: str,
         uhid: Optional[str] = None,
-        top_k: int = 4,
+        top_k: int = 5,
     ) -> List[RetrievedChunk]:
         """
-        Retrieves top-K relevant grounded documents (dynamic patient chunks + live department snapshots + static hospital docs).
-        Applies exact token boost if query or uhid specifies an assigned token number or patient name.
+        Retrieves top-K relevant grounded documents.
         """
-        # 1. Collect all documents
         dynamic_patient_docs = build_dynamic_patient_chunks()
         dynamic_dept_docs = build_dynamic_department_snapshots()
         all_docs = dynamic_patient_docs + dynamic_dept_docs + STATIC_HOSPITAL_DOCUMENTS
@@ -404,14 +398,14 @@ class HospitalRAGRetriever:
                 for d in STATIC_HOSPITAL_DOCUMENTS[:top_k]
             ]
 
-        # Extract explicit token candidates in query
+        # Extract explicit token candidates
         match_code = re.search(r"\b((?:SS|UHID|TK)-\d{4}-\d+|(?:SS|UHID|TK)-\d+)\b", query, re.IGNORECASE)
         explicit_token = match_code.group(1).upper() if match_code else (uhid.upper() if uhid else None)
 
         match_num = re.search(r"\b(?:token|uhid|pass|no\.?|number|id|#)\s*[:#-]?\s*(\d{1,6})\b", query, re.IGNORECASE)
         numeric_candidate = match_num.group(1).strip() if match_num else None
 
-        # 2. Compute IDF across corpus
+        # Compute TF-IDF
         doc_count = len(all_docs)
         doc_freq: Dict[str, int] = {}
         doc_tfs: List[Dict[str, float]] = []
@@ -423,16 +417,21 @@ class HospitalRAGRetriever:
             for term in set(doc_tokens):
                 doc_freq[term] = doc_freq.get(term, 0) + 1
 
-        # 3. Score each document
         scored_chunks: List[RetrievedChunk] = []
         q_tf = self._compute_tf(q_tokens)
         q_lower = query.lower()
+
+        # Check if query is looking for queue stats / department wait time
+        is_queue_stat_query = any(k in q_lower for k in [
+            "how many", "waiting", "queue", "busiest", "bhed", "rush", "load",
+            "average wait", "how long", "kitne", "kitna time", "enta time", "chustunnaru"
+        ]) and not explicit_token and not numeric_candidate
 
         for idx, doc in enumerate(all_docs):
             score = 0.0
             matched: List[str] = []
 
-            # Cosine-like TF-IDF similarity
+            # TF-IDF Cosine
             doc_tf = doc_tfs[idx]
             for term, q_val in q_tf.items():
                 if term in doc_tf:
@@ -441,75 +440,91 @@ class HospitalRAGRetriever:
                     score += term_score
                     matched.append(term)
 
-            # Patient Token / UHID / Name matching boost
             doc_uhid = str(doc.metadata.get("uhid", "")).upper()
             doc_name = str(doc.metadata.get("full_name", "")).lower()
 
+            # Exact token boosts
             if explicit_token:
                 if doc_uhid == explicit_token or explicit_token in doc.id:
-                    score += 10.0
+                    score += 15.0
                     matched.append(f"EXACT_TOKEN_MATCH:{explicit_token}")
                 elif explicit_token in doc_uhid:
-                    score += 6.0
+                    score += 8.0
                     matched.append(f"PARTIAL_TOKEN_MATCH:{explicit_token}")
 
             if numeric_candidate and numeric_candidate.isdigit():
                 suffix_padded = f"-{int(numeric_candidate):04d}"
                 suffix_raw = f"-{numeric_candidate}"
                 if doc_uhid.endswith(suffix_padded) or doc_uhid.endswith(suffix_raw):
-                    score += 9.0
+                    score += 12.0
                     matched.append(f"NUMERIC_TOKEN_MATCH:{numeric_candidate}")
 
-            # Check if patient name in query
-            if doc.category == "PATIENT_RECORD" and doc_name:
+            # Patient Name match
+            if doc.category == "PATIENT_RECORD" and doc_name and not is_queue_stat_query:
                 name_parts = [p for p in doc_name.split() if len(p) > 2]
                 if any(p in q_lower for p in name_parts):
-                    score += 8.0
+                    score += 10.0
                     matched.append(f"PATIENT_NAME_MATCH:{doc_name}")
 
             # Clinical Safety check
-            if doc.category == "CLINICAL_SAFETY" and any(k in q_lower for k in ["medicine", "tablet", "pill", "syrup", "dosage", "prescribe", "dawa", "goli", "మందు", "cure", "antibiotic", "paracetamol", "painkiller"]):
-                score += 8.0
+            if doc.category == "CLINICAL_SAFETY" and any(k in q_lower for k in [
+                "medicine", "tablet", "pill", "syrup", "dosage", "prescribe", "dawa", "goli",
+                "మందు", "cure", "antibiotic", "paracetamol", "painkiller"
+            ]):
+                score += 12.0
                 matched.append("SAFETY_KEYWORD_MATCH")
 
             # Department Queue and Snapshot check
             if doc.category == "DEPARTMENT_SNAPSHOT":
                 dept_name = str(doc.metadata.get("department_name", "")).lower()
-                if any(k in q_lower for k in ["how many", "waiting", "queue", "busiest", "bhed", "line", "kitta", "rush", "load", "average wait", "how long", "kitna time"]):
-                    score += 3.5
-                    matched.append("QUEUE_LOAD_MATCH")
+                if is_queue_stat_query:
+                    score += 8.0
+                    matched.append("QUEUE_LOAD_INTENT")
                 if dept_name and (dept_name in q_lower or any(p in q_lower for p in dept_name.split() if len(p) > 3)):
-                    score += 5.0
-                    matched.append(f"DEPT_LOAD_MATCH:{dept_name}")
+                    score += 9.0
+                    matched.append(f"DEPT_MATCH:{dept_name}")
 
             # Emergency hotline check
-            if doc.category == "EMERGENCY_HOTLINE" and any(k in q_lower for k in ["ambulance", "emergency", "108", "102", "contact", "phone", "help", "నంబర్", "ఫోన్", "అంబులెన్స్", "फोन"]):
-                score += 6.0
+            if doc.category == "EMERGENCY_HOTLINE" and any(k in q_lower for k in [
+                "ambulance", "emergency", "108", "102", "contact", "phone", "help",
+                "నంబర్", "ఫోన్", "అంబులెన్స్", "फोन", "हेल्प"
+            ]):
+                score += 8.0
                 matched.append("HOTLINE_KEYWORD_MATCH")
 
             # Department / Room Directory check
-            if doc.category == "DEPARTMENT_DIRECTORY" and any(k in q_lower for k in ["room", "department", "where", "floor", "kamra", "kahan", "గది", "విభాగం", "ఎక్కడ", "direction", "location"]):
-                score += 5.0
+            if doc.category == "DEPARTMENT_DIRECTORY" and any(k in q_lower for k in [
+                "room", "department", "where", "floor", "kamra", "kahan", "గది", "విభాగం", "ఎక్కడ",
+                "direction", "location", "pharmacy", "lab"
+            ]):
+                score += 8.0
                 matched.append("ROOM_DIRECTORY_MATCH")
 
             # Triage priority check
-            if doc.category == "TRIAGE_PROTOCOL" and any(k in q_lower for k in ["priority", "priorit", "triage", "score", "critical", "called first", "order", "urgent", "before me", "pahle", "ముందు", "प्राथमिकता"]):
-                score += 6.0
+            if doc.category == "TRIAGE_PROTOCOL" and any(k in q_lower for k in [
+                "priority", "priorit", "triage", "score", "critical", "called first", "order", "urgent",
+                "before me", "pahle", "ముందు", "प्राथमिकता"
+            ]):
+                score += 8.0
                 matched.append("TRIAGE_PROTOCOL_MATCH")
 
             # Vitals check
-            if doc.category == "VITALS_REFERENCE" and any(k in q_lower for k in ["vital", "spo2", "oxygen", "pulse", "bp", "blood pressure", "temp", "fever", "heart rate", "रक्तचाप", "ఆక్సిజన్", "pulse"]):
-                score += 5.0
+            if doc.category == "VITALS_REFERENCE" and any(k in q_lower for k in [
+                "vital", "spo2", "oxygen", "pulse", "bp", "blood pressure", "temp", "fever",
+                "heart rate", "रक्तचाप", "ఆక్సిజన్"
+            ]):
+                score += 8.0
                 matched.append("VITALS_REFERENCE_MATCH")
 
             # Documents / Checklist check
-            if doc.category == "VISIT_CHECKLIST" and any(k in q_lower for k in ["document", "bring", "carry", "aadhaar", "card", "kagaz", "తీసుకురావాలి", "పత్రాలు", "दस्तावेज", "slip"]):
-                score += 5.0
+            if doc.category == "VISIT_CHECKLIST" and any(k in q_lower for k in [
+                "document", "bring", "carry", "aadhaar", "card", "kagaz", "తీసుకురావాలి", "పత్రాలు", "दस्तावेज"
+            ]):
+                score += 8.0
                 matched.append("CHECKLIST_MATCH")
 
             scored_chunks.append(RetrievedChunk(document=doc, similarity_score=score, matched_terms=matched))
 
-        # 4. Sort by highest relevance score
         scored_chunks.sort(key=lambda x: x.similarity_score, reverse=True)
         return scored_chunks[:top_k]
 

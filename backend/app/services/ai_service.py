@@ -183,6 +183,84 @@ def _format_patient_rag_response(
     )
 
 
+def _format_department_snapshot_response(
+    dept_chunk: RAGDocument,
+    lang: str = "en",
+    retrieved_sources: Optional[List[str]] = None,
+) -> PatientAssistantResponse:
+    """Formats dynamic department queue loads into localized responses."""
+    sources = retrieved_sources or [dept_chunk.title]
+    meta = dept_chunk.metadata
+    dept_name = meta.get("department_name")
+    waiting = meta.get("waiting_count", 0)
+    in_consult = meta.get("in_consultation_count", 0)
+    wait_time = meta.get("estimated_wait", 0)
+    room = meta.get("room", "Consultation Wing")
+
+    if dept_name:
+        if lang == "hi":
+            ans = (
+                f"🏥 {dept_name} - लाइव कतार स्थिति:\n"
+                f"• निर्धारित कक्ष: {room}\n"
+                f"• कतार में प्रतीक्षारत रोगी: {waiting} व्यक्ति\n"
+                f"• वर्तमान परामर्श में: {in_consult} व्यक्ति\n"
+                f"• नए पंजीकरण के लिए औसत प्रतीक्षा: ~{wait_time} मिनट\n"
+                f"📢 सूचना: आपातकालीन और गंभीर रोगियों को प्राथमिकता दी जाती है।"
+            )
+        elif lang == "te":
+            ans = (
+                f"🏥 {dept_name} - లైవ్ క్యూ సమాచారం:\n"
+                f"• కేటాయించిన గది: {room}\n"
+                f"• క్యూలో వేచి ఉన్న రోగులు: {waiting} మంది\n"
+                f"• ప్రస్తుతం సంప్రదింపుల్లో ఉన్నవారు: {in_consult} మంది\n"
+                f"• సగటు నిరీక్షణ సమయం: ~{wait_time} నిమిషాలు\n"
+                f"📢 గమనిక: అత్యవసర రోగులకు ట్రయాజ్ ఆధారంగా ప్రాధాన్యత ఇవ్వబడుతుంది."
+            )
+        else:
+            ans = (
+                f"🏥 Live Queue Status for {dept_name}:\n"
+                f"• Consultation Room: {room}\n"
+                f"• Patients Waiting in Line: {waiting}\n"
+                f"• Currently in Consultation / Called: {in_consult}\n"
+                f"• Estimated Wait for New Intakes: ~{wait_time} minutes\n"
+                f"📢 Note: Patients are prioritized dynamically based on clinical triage urgency."
+            )
+    else:
+        # Global hospital overview
+        total_waiting = meta.get("total_waiting", 0)
+        total_consulting = meta.get("total_consulting", 0)
+        if lang == "hi":
+            ans = (
+                f"🏥 सिविल अस्पताल • वार्ड ए - कुल संचालन स्थिति:\n"
+                f"• कुल प्रतीक्षारत रोगी: {total_waiting}\n"
+                f"• कुल सक्रिय परामर्श: {total_consulting}\n"
+                f"• ओपीडी समय: सुबह 8:00 से शाम 4:00 तक (आपातकालीन 24x7 खुला)"
+            )
+        elif lang == "te":
+            ans = (
+                f"🏥 సివిల్ హాస్పిటల్ • వార్డ్ A - మొత్తం నిర్వహణ స్థితి:\n"
+                f"• మొత్తం వేచి ఉన్న రోగులు: {total_waiting}\n"
+                f"• మొత్తం కన్సల్టేషన్‌లో ఉన్నవారు: {total_consulting}\n"
+                f"• OPD సమయాలు: ఉదయం 8:00 నుండి సాయంత్రం 4:00 వరకు (ER 24x7 అందుబాటులో)"
+            )
+        else:
+            ans = (
+                f"🏥 Civil Hospital • Ward A Operations Overview:\n"
+                f"• Total Patients Waiting across departments: {total_waiting}\n"
+                f"• Total Consultations in Progress: {total_consulting}\n"
+                f"• OPD Hours: Mon - Sat 8:00 AM - 4:00 PM (Emergency 24x7 Open)"
+            )
+
+    return PatientAssistantResponse(
+        answer=ans,
+        is_ai_generated=False,
+        model="rag-deterministic-synthesizer",
+        grounded_sources=sources,
+        needs_staff_consultation=False,
+        suggested_action="View Dynamic Queue",
+    )
+
+
 def _rag_deterministic_fallback(
     query: str,
     retrieved_chunks: List[RetrievedChunk],
@@ -190,17 +268,19 @@ def _rag_deterministic_fallback(
     uhid: Optional[str] = None,
 ) -> PatientAssistantResponse:
     """
-    High-precision deterministic RAG synthesizer that generates grounded responses
-    directly from retrieved document chunks across English, Hindi, and Telugu.
+    High-precision, intent-driven deterministic RAG synthesizer.
+    Routes queries to the exact grounded category without misattribution.
     """
     q = query.lower()
     sources = [chunk.document.title for chunk in retrieved_chunks] if retrieved_chunks else ["Civil Hospital Ward A"]
 
-    # 1. Clinical safety check / Prescription refusal
+    # -------------------------------------------------------------
+    # INTENT 1: Clinical Safety / Prescription / Dosage Refusal
+    # -------------------------------------------------------------
     medical_keywords = [
         "medicine", "tablet", "pill", "syrup", "dosage", "prescribe", "cure", "disease",
         "diagnos", "antibiotic", "paracetamol", "painkiller", "dawa", "ilaj", "goli",
-        "మందు", "చికిత్స", "మందులు"
+        "మందు", "చికిత్స", "మందులు", "డోస్"
     ]
     if any(k in q for k in medical_keywords):
         if lang == "hi":
@@ -219,64 +299,102 @@ def _rag_deterministic_fallback(
             suggested_action="Consult On-Duty Doctor / Triage Nurse",
         )
 
-    # 2. Check if a specific Token ID or Numeric ID was requested in query or uhid parameter
+    # -------------------------------------------------------------
+    # INTENT 2: Emergency Helplines & Ambulance
+    # -------------------------------------------------------------
+    if any(k in q for k in [
+        "ambulance", "emergency number", "emergency phone", "108", "102",
+        "helpline", "hotline", "फोन", "अंबुलेस", "एम्बुलेंस", "అంబులెన్స్", "నంబర్"
+    ]):
+        if lang == "hi":
+            ans = "🚨 आपातकालीन सेवाएं 24x7 उपलब्ध हैं:\n• राष्ट्रीय आपातकालीन एम्बुलेंस: 108 (टोल-फ्री)\n• सरकारी मेडिकल हेल्पलाइन: 102 (टोल-फ्री)\n• सिविल अस्पताल हेल्पडेस्क: 011-2399-4400\n• गंभीर स्थिति में सीधे भूतल पर कक्ष 101 (ER) में जाएं।"
+        elif lang == "te":
+            ans = "🚨 అత్యవసర సేవలు 24x7 అందుబాటులో ఉన్నాయి:\n• జాతీయ ఎమర్జెన్సీ అంబులెన్స్: 108 (టోల్ ఫ్రీ)\n• ప్రభుత్వ మెడికల్ హెల్ప్‌లైన్: 102 (టోల్ ఫ్రీ)\n• సివిల్ హాస్పిటల్ హెల్ప్‌డెస్క్: 011-2399-4400\n• అత్యవసర పరిస్థితిలో నేరుగా గ్రౌండ్ ఫ్లోర్‌లోని రూమ్ 101 (ER) వద్దకు వెళ్లండి."
+        else:
+            ans = "🚨 Emergency Services are available 24x7:\n• National Emergency Ambulance: 108 (Toll-Free, 24x7)\n• Government Medical Helpline: 102 (Toll-Free, 24x7)\n• Civil Hospital Ward A Emergency Desk: 011-2399-4400\n• In case of acute trauma or severe distress, proceed directly to Emergency Room 101 (Ground Floor)."
+
+        return PatientAssistantResponse(
+            answer=ans,
+            is_ai_generated=False,
+            model="rag-deterministic-synthesizer",
+            grounded_sources=["24x7 Emergency Helplines & Ambulance Dispatch"],
+            needs_staff_consultation=False,
+            suggested_action="Call 108 / 102 in critical emergency",
+        )
+
+    # -------------------------------------------------------------
+    # INTENT 3: Specific Patient Token / UHID / Name Inquiry
+    # -------------------------------------------------------------
     token_match = re.search(r"\b((?:SS|UHID|TK)-\d{4}-\d+|(?:SS|UHID|TK)-\d+)\b", query, re.IGNORECASE)
     match_num = re.search(r"\b(?:token|uhid|pass|no\.?|number|id|#)\s*[:#-]?\s*(\d{1,6})\b", query, re.IGNORECASE)
 
-    requested_token = token_match.group(1).upper() if token_match else (uhid.upper() if uhid else None)
+    explicit_token = token_match.group(1).upper() if token_match else (uhid.upper() if uhid else None)
     numeric_id = match_num.group(1).strip() if match_num else None
 
-    # Search for patient record in retrieved chunks
-    for chunk in retrieved_chunks:
-        if chunk.document.category == "PATIENT_RECORD":
-            doc_uhid = str(chunk.document.metadata.get("uhid", "")).upper()
-            doc_name = str(chunk.document.metadata.get("full_name", "")).lower()
+    # Only treat as patient lookup if explicit token/number or patient context query
+    is_patient_lookup = bool(explicit_token or numeric_id or any(k in q for k in ["my token", "mera token", "naa token", "my wait", "mera number", "naa rank"]))
 
-            if requested_token and (doc_uhid == requested_token or requested_token in doc_uhid):
-                return _format_patient_rag_response(chunk.document, lang, sources)
+    if is_patient_lookup:
+        for chunk in retrieved_chunks:
+            if chunk.document.category == "PATIENT_RECORD":
+                doc_uhid = str(chunk.document.metadata.get("uhid", "")).upper()
+                doc_name = str(chunk.document.metadata.get("full_name", "")).lower()
 
-            if numeric_id and (doc_uhid.endswith(f"-{int(numeric_id):04d}") or doc_uhid.endswith(f"-{numeric_id}")):
-                return _format_patient_rag_response(chunk.document, lang, sources)
+                if explicit_token and (doc_uhid == explicit_token or explicit_token in doc_uhid):
+                    return _format_patient_rag_response(chunk.document, lang, sources)
 
-            # Check if name in query
-            name_parts = [p for p in doc_name.split() if len(p) > 2]
-            if name_parts and any(p in q for p in name_parts):
-                return _format_patient_rag_response(chunk.document, lang, sources)
+                if numeric_id and (doc_uhid.endswith(f"-{int(numeric_id):04d}") or doc_uhid.endswith(f"-{numeric_id}")):
+                    return _format_patient_rag_response(chunk.document, lang, sources)
 
-    if token_match or (numeric_id and any(k in q for k in ["token", "status", "queue", "rank", "wait", "kab"])):
-        searched = token_match.group(1).upper() if token_match else f"#{numeric_id}"
-        if lang == "hi":
-            not_found = f"⚠️ टोकन '{searched}' अस्पताल के सक्रिय पंजीकरण रिकॉर्ड में नहीं मिला। कृपया अपने मुद्रित पर्चे की जांच करें या वार्ड ए में पंजीकरण डेस्क पर संपर्क करें।"
-        elif lang == "te":
-            not_found = f"⚠️ టోకెన్ '{searched}' ఆసుపత్రి రిజిస్ట్రేషన్ రికార్డులలో కనుగొనబడలేదు. దయచేసి మీ రిజిస్ట్రేషన్ స్లిప్‌ను తనిఖీ చేయండి లేదా వార్డ్ A రిజిస్ట్రేషన్ డెస్క్‌ను సంప్రదించండి."
-        else:
-            not_found = f"⚠️ Token '{searched}' was not found in active hospital records. Please verify the token number printed on your registration slip, or visit the Registration Desk in Ward A."
+                name_parts = [p for p in doc_name.split() if len(p) > 2]
+                if name_parts and any(p in q for p in name_parts):
+                    return _format_patient_rag_response(chunk.document, lang, sources)
 
-        return PatientAssistantResponse(
-            answer=not_found,
-            is_ai_generated=False,
-            model="rag-deterministic-synthesizer",
-            grounded_sources=["Hospital Registration Database"],
-            needs_staff_consultation=True,
-            suggested_action="Visit Registration Desk in Ward A",
-        )
+        # Fallback to top patient record if specific token was passed via parameter
+        if uhid:
+            for chunk in retrieved_chunks:
+                if chunk.document.category == "PATIENT_RECORD":
+                    return _format_patient_rag_response(chunk.document, lang, sources)
 
-    # 3. Dynamic Department Live Snapshot / Wait times queries
-    for chunk in retrieved_chunks:
-        if chunk.document.category == "DEPARTMENT_SNAPSHOT":
+        # Explicit token searched was not found
+        if token_match or (numeric_id and any(k in q for k in ["token", "status", "queue", "rank", "wait", "kab"])):
+            searched = token_match.group(1).upper() if token_match else f"#{numeric_id}"
+            if lang == "hi":
+                not_found = f"⚠️ टोकन '{searched}' सक्रिय पंजीकरण रिकॉर्ड में नहीं मिला। कृपया अपने पर्चे की जांच करें या वार्ड ए के पंजीकरण डेस्क पर संपर्क करें।"
+            elif lang == "te":
+                not_found = f"⚠️ టోకెన్ '{searched}' ఆసుపత్రి రికార్డులలో కనుగొనబడలేదు. దయచేసి మీ రిజిస్ట్రేషన్ స్లిప్‌ను తనిఖీ చేయండి లేదా వార్డ్ A డెస్క్‌ను సంప్రదించండి."
+            else:
+                not_found = f"⚠️ Token '{searched}' was not found in active hospital records. Please verify the token number printed on your registration slip, or visit the Registration Desk in Ward A."
+
             return PatientAssistantResponse(
-                answer=chunk.document.content,
+                answer=not_found,
                 is_ai_generated=False,
                 model="rag-deterministic-synthesizer",
-                grounded_sources=sources,
-                needs_staff_consultation=False,
-                suggested_action="Check Live Queue Display",
+                grounded_sources=["Hospital Registration Database"],
+                needs_staff_consultation=True,
+                suggested_action="Visit Registration Desk in Ward A",
             )
 
-    # 4. Triage Priority & "Why called before me"
-    if any(k in q for k in ["priority", "priorit", "triage", "score", "critical", "called first", "order", "urgent", "before me", "pahle", "ముందు", "प्राथमिकता", "క్యు"]):
+    # -------------------------------------------------------------
+    # INTENT 4: Department Queue Load & Wait Time Counts
+    # -------------------------------------------------------------
+    if any(k in q for k in [
+        "how many", "waiting", "queue", "busiest", "bhed", "rush", "load",
+        "average wait", "how long", "kitne", "kitna time", "enta time", "chustunnaru", "line me"
+    ]):
+        for chunk in retrieved_chunks:
+            if chunk.document.category == "DEPARTMENT_SNAPSHOT":
+                return _format_department_snapshot_response(chunk.document, lang, sources)
+
+    # -------------------------------------------------------------
+    # INTENT 5: Triage Priority & "Why Called Before Me"
+    # -------------------------------------------------------------
+    if any(k in q for k in [
+        "priority", "priorit", "triage", "score", "critical", "called first", "order", "urgent",
+        "before me", "pahle", "ముందు", "प्राथमिकता", "క్యు"
+    ]):
         if lang == "hi":
-            ans = "सेहत सेतु में कतार का क्रम ट्राइएज गंभीरता (Triage Urgency) और आगमन समय पर आधारित होता है:\n• अति गंभीर (CRITICAL): ऑक्सीजन < 92% या सीने में तेज दर्द वाले रोगियों को तत्काल देखा जाता है ताकि जान बचाई जा सके।\n• गंभीर (HIGH): तेज बुखार या तीव्र हृदय गति (~10-15 मिनट)।\n• मध्यम (MODERATE): सामान्य दर्द या संक्रमण (~25-40 मिनट)।\n• सामान्य (LOW): हल्की तकलीफें (~45-60 मिनट)।"
+            ans = "सेहत सेतु में कतार का क्रम ट्राइएज गंभीरता (Triage Urgency) और आगमन समय पर आधारित होता है:\n• जीवन रक्षक प्राथमिकता: जिन रोगियों की ऑक्सीजन < 92% या सीने में तेज दर्द है, उन्हें तत्काल देखा जाता है।\n• गंभीर (HIGH): तेज बुखार या तीव्र हृदय गति (~10-15 मिनट प्रतीक्षा)।\n• मध्यम (MODERATE): सामान्य संक्रमण या दर्द (~25-40 मिनट प्रतीक्षा)।\n• सामान्य (LOW): हल्की तकलीफें (~45-60 मिनट प्रतीक्षा)।"
         elif lang == "te":
             ans = "సేహత్‌సేతులో క్యూ క్రమం ట్రయాజ్ అత్యవసరత మరియు వచ్చిన సమయం ఆధారంగా నిర్ణయించబడుతుంది:\n• అత్యవసరం (CRITICAL): ఆక్సిజన్ < 92% లేదా గుండె నొప్పి ఉన్న రోగులకు ప్రాణాపాయ నివారణకు తక్షణ ప్రాధాన్యత.\n• తీవ్రమైనది (HIGH): తీవ్ర జ్వరం లేదా గుండె వేగం (~10-15 నిమిషాలు).\n• మధ్యస్థం (MODERATE): సాధారణ ఇన్ఫెక్షన్లు (~25-40 నిమిషాలు).\n• సాధారణం (LOW): సాధారణ సమస్యలు (~45-60 నిమిషాలు)."
         else:
@@ -286,48 +404,38 @@ def _rag_deterministic_fallback(
             answer=ans,
             is_ai_generated=False,
             model="rag-deterministic-synthesizer",
-            grounded_sources=sources,
+            grounded_sources=["Deterministic Clinical Triage Rules & Queue Prioritization"],
             needs_staff_consultation=False,
             suggested_action="Review Triage Rules Policy",
         )
 
-    # 5. Department and Room Directory
-    if any(k in q for k in ["department", "room", "where", "ward", "kamra", "kahan", "floor", "pharmacy", "lab", "గది", "విభాగం", "ఎక్కడ", "101", "104", "108", "112", "115"]):
+    # -------------------------------------------------------------
+    # INTENT 6: Facility Locations & Department Rooms
+    # -------------------------------------------------------------
+    if any(k in q for k in [
+        "department", "room", "where", "ward", "kamra", "kahan", "floor", "pharmacy", "lab",
+        "cardiology", "orthopedic", "pediatric", "emergency", "medicine",
+        "గది", "విభాగం", "ఎక్కడ", "101", "104", "108", "112", "115", "location"
+    ]):
         if lang == "hi":
             ans = "सिविल अस्पताल (वार्ड ए) के विभाग एवं कक्ष विवरण:\n• आपातकालीन (ER): कक्ष 101 एवं 102 (24x7 खुला, भूतल)\n• जनरल मेडिसिन (OPD): कक्ष 104 एवं 105 (प्रथम तल)\n• कार्डियोलॉजी (हृदय रोग): कक्ष 108 (प्रथम तल)\n• ऑर्थोपेडिक्स (हड्डी रोग): कक्ष 112 (द्वितीय तल)\n• पीडियाट्रिक्स (बाल रोग): कक्ष 115 (द्वितीय तल)\n• फार्मेसी (दवा खाना): भूतल (24x7 खुला)\n• पैथोलॉजी लैब: कक्ष 103 (भूतल)"
         elif lang == "te":
             ans = "సివిల్ హాస్పిటల్ (వార్డ్ A) విభాగాలు & గదుల వివరాలు:\n• ఎమర్జెన్సీ (ER): రూమ్ 101 & 102 (24x7 అందుబాటులో, గ్రౌండ్ ఫ్లోర్)\n• జనరల్ మెడిసిన్ (OPD): రూమ్ 104 & 105 (మొదటి అంతస్తు)\n• కార్డియాలజీ: రూమ్ 108 (మొదటి అంతస్తు)\n• ఆర్థోపెడిక్స్: రూమ్ 112 (రెండవ అంతస్తు)\n• పీడియాట్రిక్స్: రూమ్ 115 (రెండవ అంతస్తు)\n• ఫార్మసీ: గ్రౌండ్ ఫ్లోర్ (24x7 అందుబాటులో)\n• పాథాలజీ ల్యాబ్: రూమ్ 103 (గ్రౌండ్ ఫ్లోర్)"
         else:
-            ans = "Civil Hospital (Ward A) Departments & Facility Locations:\n• Emergency (ER): Rooms 101 & 102 (Ground Floor, 24x7 Open)\n• General Medicine: Rooms 104 & 105 (First Floor)\n• Cardiology: Room 108 (First Floor)\n• Orthopedics: Room 112 (Second Floor)\n• Pediatrics: Room 115 (Second Floor)\n• Pharmacy (Medicines): Ground Floor near ER (24x7 Open)\n• Diagnostic Lab & Blood Collection: Room 103 (Ground Floor)"
+            ans = "Civil Hospital (Ward A) Departments & Facility Locations:\n• Emergency (ER): Rooms 101 & 102 (Ground Floor, 24x7 Open)\n• General Medicine: Rooms 104 & 105 (First Floor)\n• Cardiology: Room 108 (First Floor)\n• Orthopedics: Room 112 (Second Floor)\n• Pediatrics: Room 115 (Second Floor)\n• Pharmacy (Medicines): Ground Floor near ER (24x7 Open)\n• Diagnostic Pathology Lab: Room 103 (Ground Floor)"
 
         return PatientAssistantResponse(
             answer=ans,
             is_ai_generated=False,
             model="rag-deterministic-synthesizer",
-            grounded_sources=sources,
+            grounded_sources=["Hospital Departments & Consultation Room Directory"],
             needs_staff_consultation=False,
             suggested_action="Proceed to designated department room",
         )
 
-    # 6. Emergency Helpline
-    if any(k in q for k in ["ambulance", "emergency", "contact", "phone", "number", "help", "108", "102", "ఫోన్", "అంబులెన్స్", "आपातकालीन", "हेल्प"]):
-        if lang == "hi":
-            ans = "आपातकालीन सेवाएं 24x7 उपलब्ध हैं। आपातकालीन एम्बुलेंस: 108 या 102। सिविल अस्पताल हेल्पडेस्क: 011-2399-4400। आपातकाल की स्थिति में सीधे कक्ष 101 (ER) पर जाएं।"
-        elif lang == "te":
-            ans = "అత్యవసర సేవలు 24x7 అందుబాటులో ఉన్నాయి. ఎమర్జెన్సీ అంబులెన్స్: 108 లేదా 102. సివిల్ హాస్పిటల్ హెల్ప్‌డెస్క్: 011-2399-4400. అత్యవసర పరిస్థితిలో నేరుగా రూమ్ 101 (ER) వద్దకు వెళ్లండి."
-        else:
-            ans = "Emergency Services are available 24x7. Emergency Ambulance Hotline: 108 or 102. Civil Hospital Desk: 011-2399-4400. In case of acute symptoms, proceed immediately to Emergency Room 101."
-
-        return PatientAssistantResponse(
-            answer=ans,
-            is_ai_generated=False,
-            model="rag-deterministic-synthesizer",
-            grounded_sources=sources,
-            needs_staff_consultation=False,
-            suggested_action="Call 108 / 102 in critical emergency",
-        )
-
-    # 7. Vitals Reference
+    # -------------------------------------------------------------
+    # INTENT 7: Baseline Vitals Reference
+    # -------------------------------------------------------------
     if any(k in q for k in ["vital", "spo2", "oxygen", "pulse", "heart rate", "bp", "blood pressure", "temp", "fever", "रक्तचाप", "ఆక్సిజన్"]):
         if lang == "hi":
             ans = "सामान्य महत्वपूर्ण संकेत (केवल सामान्य जानकारी के लिए):\n• ऑक्सीजन (SpO2): 95% - 100% (92% से कम पर डॉक्टर तुरंत देखते हैं)\n• हृदय गति (Pulse): 60 - 100 bpm\n• रक्तचाप (BP): ~120/80 mmHg\n• तापमान: 97.8°F - 99.1°F (बुखार > 100.4°F)"
@@ -340,12 +448,14 @@ def _rag_deterministic_fallback(
             answer=ans,
             is_ai_generated=False,
             model="rag-deterministic-synthesizer",
-            grounded_sources=sources,
+            grounded_sources=["Standard Clinical Baseline Vital Signs Reference"],
             needs_staff_consultation=False,
             suggested_action="Consult clinician for personalized readings",
         )
 
-    # 8. Document Checklist
+    # -------------------------------------------------------------
+    # INTENT 8: Document Checklist
+    # -------------------------------------------------------------
     if any(k in q for k in ["document", "bring", "carry", "aadhaar", "card", "kagaz", "తీసుకురావాలి", "పత్రాలు", "दस्तावेज"]):
         if lang == "hi":
             ans = "अस्पताल में परामर्श के लिए निम्नलिखित साथ रखें:\n1. आपका मुद्रित टोकन पर्चा या मोबाइल एसएमएस\n2. पहचान पत्र (आधार कार्ड / आयुष्मान भारत कार्ड)\n3. पुराने पर्चे, दवाइयां और टेस्ट रिपोर्ट"
@@ -358,12 +468,32 @@ def _rag_deterministic_fallback(
             answer=ans,
             is_ai_generated=False,
             model="rag-deterministic-synthesizer",
-            grounded_sources=sources,
+            grounded_sources=["Patient Registration & Consultation Document Checklist"],
             needs_staff_consultation=False,
             suggested_action="Keep token and ID ready",
         )
 
-    # General / Hospital Facility Overview
+    # -------------------------------------------------------------
+    # INTENT 9: Operating Hours & General Overview
+    # -------------------------------------------------------------
+    if any(k in q for k in ["timing", "hour", "open", "close", "samay", "kab khulta", "సమయం"]):
+        if lang == "hi":
+            ans = "सिविल अस्पताल (वार्ड ए) संचालन समय:\n• आपातकालीन विभाग (ER): 24 घंटे, सातों दिन खुला (24x7, भूतल)\n• ओपीडी परामर्श: सोमवार से शनिवार, सुबह 8:00 से शाम 4:00 बजे तक\n• हेल्पडेस्क फोन: 011-2399-4400"
+        elif lang == "te":
+            ans = "సివిల్ హాస్పిటల్ (వార్డ్ A) పని వేళలు:\n• ఎమర్జెన్సీ విభాగం (ER): 24 గంటలు, రోజూ అందుబాటులో (24x7, గ్రౌండ్ ఫ్లోర్)\n• OPD సంప్రదింపులు: సోమవారం నుండి శనివారం, ఉదయం 8:00 నుండి సాయంత్రం 4:00 వరకు\n• హెల్ప్‌డెస్క్ ఫోన్: 011-2399-4400"
+        else:
+            ans = "Civil Hospital (Ward A) Operating Hours:\n• Emergency Department (ER): Open 24 hours a day, 7 days a week (24x7, Ground Floor)\n• Outpatient (OPD) Consultations: Monday through Saturday, 8:00 AM - 4:00 PM\n• General Helpdesk: 011-2399-4400"
+
+        return PatientAssistantResponse(
+            answer=ans,
+            is_ai_generated=False,
+            model="rag-deterministic-synthesizer",
+            grounded_sources=["Civil Hospital Ward A - Facility & Operating Hours"],
+            needs_staff_consultation=False,
+            suggested_action="Check Hospital Hours",
+        )
+
+    # Default General Overview
     if lang == "hi":
         ans = "सेहत सेतु (SehatSetu) सिविल अस्पताल • वार्ड ए का स्मार्ट रोगी कतार एवं आपातकालीन ट्राइएज प्लेटफॉर्म है। यह पारदर्शी, नियम-आधारित ट्राइएज और वास्तविक समय में कतार प्रबंधन प्रदान करता है।"
     elif lang == "te":
