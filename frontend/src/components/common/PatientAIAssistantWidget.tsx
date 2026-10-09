@@ -124,20 +124,20 @@ export const PatientAIAssistantWidget: React.FC = () => {
     setInputValue('');
     setIsLoading(true);
 
-    const tokenToQuery = specificToken || activeUhid;
+    const tokenToQuery = specificToken || (tokenInput.trim() ? tokenInput.trim() : (currentUser?.userRole === 'PATIENT' && currentUser?.uhid ? currentUser.uhid : undefined));
 
     try {
       const res: PatientAssistantResponse = await aiService.askPatientAssistant({
         question: textToSend,
         language: language,
         patient_uhid: tokenToQuery,
-        patient_context: {
+        patient_context: tokenToQuery ? {
           queue_position: patientRank > 0 ? patientRank : 1,
           estimated_wait_minutes: liveWaitMins,
           department_name: liveEntry?.department_name || 'General Medicine',
           status: liveEntry?.status || 'WAITING',
           uhid: tokenToQuery,
-        },
+        } : undefined,
       });
 
       const assistantMsg: Message = {
