@@ -78,19 +78,33 @@ export const QueuePage: React.FC = () => {
     refetchInterval: 10000, // Poll every 10 seconds
   });
 
+  const getDepartmentRoom = (deptId?: string, deptName?: string) => {
+    const name = (deptName || departments?.find((d) => d.id === deptId)?.name || '').toUpperCase();
+    if (name.includes('EMERGENCY')) return 'Emergency Room 101 (Ground Floor)';
+    if (name.includes('GEN') || name.includes('MEDICINE')) return 'Room 104 (OPD First Floor)';
+    if (name.includes('PEDIATRIC')) return 'Room 115 (Second Floor)';
+    if (name.includes('CARDIO')) return 'Room 108 (First Floor)';
+    if (name.includes('ORTHO')) return 'Room 112 (Second Floor)';
+    return 'Consultation Room 1';
+  };
+
   // Call Next Patient Mutation
   const callNextMutation = useMutation({
-    mutationFn: (deptId: string) => callNextPatient(deptId, 'Consultation Room 1'),
+    mutationFn: (deptId: string) => {
+      const room = getDepartmentRoom(deptId);
+      return callNextPatient(deptId, room);
+    },
     onSuccess: (res) => {
       setCallFeedback(res.message);
       queryClient.invalidateQueries({ queryKey: ['queue'] });
       if (res.data) {
         setSelectedPatient(res.data);
+        const room = getDepartmentRoom(res.data.department_id, res.data.department_name);
         triggerCallAlert(
           res.data.uhid,
           res.data.full_name,
           '',
-          'Consultation Room 1',
+          room,
           res.data.department_name || 'General OPD'
         );
       }

@@ -87,6 +87,20 @@ const translations: Record<Language, Record<string, string>> = {
     status_completed: 'COMPLETED',
     status_cancelled: 'CANCELLED',
 
+    // Alias Lookups
+    today: 'Today',
+    critical: 'CRITICAL',
+    high: 'HIGH',
+    moderate: 'MODERATE',
+    low: 'LOW',
+    needs_review: 'NEEDS_REVIEW',
+    uhid: 'UHID / Token',
+    waiting: 'WAITING',
+    called: 'CALLED',
+    in_consultation: 'IN_CONSULTATION',
+    completed: 'COMPLETED',
+    cancelled: 'CANCELLED',
+
     // Overview Page
     overview_title: 'Hospital Clinical Overview',
     overview_live_badge: 'Live Operations',
@@ -316,6 +330,20 @@ const translations: Record<Language, Record<string, string>> = {
     status_completed: 'पूर्ण (COMPLETED)',
     status_cancelled: 'रद्द (CANCELLED)',
 
+    // Alias Lookups
+    today: 'आज',
+    critical: 'अति गंभीर (CRITICAL)',
+    high: 'गंभीर (HIGH)',
+    moderate: 'मध्यम (MODERATE)',
+    low: 'सामान्य (LOW)',
+    needs_review: 'समीक्षा आवश्यक',
+    uhid: 'UHID / टोकन',
+    waiting: 'प्रतीक्षारत (WAITING)',
+    called: 'बुलावा हो चुका (CALLED)',
+    in_consultation: 'परामर्श में (IN_CONSULTATION)',
+    completed: 'पूर्ण (COMPLETED)',
+    cancelled: 'रद्द (CANCELLED)',
+
     // Overview Page
     overview_title: 'अस्पताल चिकित्सीय अवलोकन',
     overview_live_badge: 'लाइव संचालन',
@@ -543,6 +571,20 @@ const translations: Record<Language, Record<string, string>> = {
     status_in_consultation: 'కన్సల్టేషన్‌లో ఉన్నారు (IN_CONSULTATION)',
     status_completed: 'పూర్తయింది (COMPLETED)',
     status_cancelled: 'రద్దు చేయబడింది (CANCELLED)',
+
+    // Alias Lookups
+    today: 'ఈరోజు',
+    critical: 'అత్యవసరం (CRITICAL)',
+    high: 'తీవ్రమైనది (HIGH)',
+    moderate: 'మధ్యస్థం (MODERATE)',
+    low: 'సాధారణం (LOW)',
+    needs_review: 'సమీక్ష అవసరం',
+    uhid: 'UHID / టోకెన్',
+    waiting: 'వేచి ఉన్నారు (WAITING)',
+    called: 'పిలవబడింది (CALLED)',
+    in_consultation: 'కన్సల్టేషన్‌లో (IN_CONSULTATION)',
+    completed: 'పూర్తయింది (COMPLETED)',
+    cancelled: 'రద్దు చేయబడింది (CANCELLED)',
 
     // Overview Page
     overview_title: 'ఆసుపత్రి క్లినికల్ అవలోకనం',

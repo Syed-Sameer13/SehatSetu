@@ -62,6 +62,16 @@ export const PatientTrackerPage: React.FC = () => {
   const queuePos = patientsAhead >= 0 ? patientsAhead + 1 : patientEntry ? 1 : 0;
   const calculatedWait = Math.max(5, queuePos * 8);
 
+  const getDepartmentRoom = (deptName?: string) => {
+    const name = (deptName || '').toUpperCase();
+    if (name.includes('EMERGENCY')) return 'Rooms 101 & 102 (ER Ground Floor)';
+    if (name.includes('GEN') || name.includes('MEDICINE')) return 'Rooms 104 & 105 (OPD First Floor)';
+    if (name.includes('PEDIATRIC')) return 'Room 115 (Second Floor)';
+    if (name.includes('CARDIO')) return 'Room 108 (First Floor)';
+    if (name.includes('ORTHO')) return 'Room 112 (Second Floor)';
+    return 'Consultation Room 1';
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchInput.trim()) {
@@ -264,7 +274,7 @@ export const PatientTrackerPage: React.FC = () => {
                   {patientEntry.department_name}
                 </div>
                 <div className="text-[11px] text-teal-700 font-semibold mt-1">
-                  Counter 1 • Consultation Room A
+                  {getDepartmentRoom(patientEntry.department_name)}
                 </div>
               </div>
             </div>
@@ -337,11 +347,11 @@ export const PatientTrackerPage: React.FC = () => {
             <div className="bg-white p-3.5 rounded-lg border border-teal-200 text-xs text-slate-800 font-mono leading-relaxed shadow-xs">
               {patientEntry.status === 'CALLED' ? (
                 language === 'hi' ? (
-                  `[सेहत सेतु अलर्ट] प्रिय ${patientEntry.full_name}, आपका टोकन #${patientEntry.uhid} ${patientEntry.department_name} (Consultation Room 1) में बुलाया गया है। कृपया तुरंत उपस्थित हों!`
+                  `[सेहत सेतु अलर्ट] प्रिय ${patientEntry.full_name}, आपका टोकन #${patientEntry.uhid} ${patientEntry.department_name} (${getDepartmentRoom(patientEntry.department_name)}) में बुलाया गया है। कृपया तुरंत उपस्थित हों!`
                 ) : language === 'te' ? (
-                  `[సేహత్‌సేతు అలర్ట్] ప్రియమైన ${patientEntry.full_name}, మీ టోకెన్ #${patientEntry.uhid} ${patientEntry.department_name} (Consultation Room 1) లోకి పిలవబడింది. దయచేసి వెంటనే హాజరుకాగలరు!`
+                  `[సేహత్‌సేతు అలర్ట్] ప్రియమైన ${patientEntry.full_name}, మీ టోకెన్ #${patientEntry.uhid} ${patientEntry.department_name} (${getDepartmentRoom(patientEntry.department_name)}) లోకి పిలవబడింది. దయచేసి వెంటనే హాజరుకాగలరు!`
                 ) : (
-                  `[SehatSetu Alert] Dear ${patientEntry.full_name}, Token #${patientEntry.uhid} has been CALLED to ${patientEntry.department_name} (Consultation Room 1). Please proceed immediately!`
+                  `[SehatSetu Alert] Dear ${patientEntry.full_name}, Token #${patientEntry.uhid} has been CALLED to ${patientEntry.department_name} (${getDepartmentRoom(patientEntry.department_name)}). Please proceed immediately!`
                 )
               ) : language === 'hi' ? (
                 `[सेहत सेतु] प्रिय ${patientEntry.full_name}, आपका टोकन #${patientEntry.uhid} ${patientEntry.department_name} के लिए पंजीकृत है। कतार स्थिति: #${queuePos}। अनुमानित प्रतीक्षा: ~${calculatedWait} मिनट। लाइव स्थिति ट्रैक करें: sehatsetu.local/track?uhid=${patientEntry.uhid}`
