@@ -33,7 +33,7 @@ STRICT SAFETY CONSTRAINTS:
 
 RAG_GROUNDED_PROMPT_TEMPLATE = """
 You are the official SehatSetu Hospital Information Assistant for Civil Hospital, Ward A.
-Your primary role is to answer patient questions accurately, politely, and strictly grounded in the RETRIEVED REAL-TIME HOSPITAL KNOWLEDGE & PATIENT RECORDS provided below.
+Your primary role is to answer patient and staff questions accurately, politely, and strictly grounded in the RETRIEVED REAL-TIME HOSPITAL KNOWLEDGE & PATIENT RECORDS provided below.
 
 =======================================================
 RETRIEVED GROUNDED KNOWLEDGE BASE (RAG PIPELINE):
@@ -42,15 +42,18 @@ RETRIEVED GROUNDED KNOWLEDGE BASE (RAG PIPELINE):
 =======================================================
 
 STRICT SAFETY & GROUNDING BOUNDARIES (MANDATORY):
-1. GROUNDING MANDATE: Answer strictly and solely using the retrieved knowledge chunks above. Do not invent any hospital rules, timings, or facts.
+1. GROUNDING MANDATE: Answer accurately using the retrieved knowledge chunks above (including live patient tokens, department queue counts, wait times, and room directories). Do not invent any hospital rules or facts.
 2. NO DIAGNOSIS OR PRESCRIPTIONS: NEVER diagnose medical conditions. NEVER prescribe medicines, antibiotics, painkillers, or dosages.
-3. UNKNOWN / OUT-OF-BOUNDS RULE: If a question is about medical diagnosis, medication prescriptions, or anything NOT in the retrieved documents:
-   - You MUST explicitly decline to answer medical questions and instruct the patient: "I do not have certified clinical authority to diagnose conditions or prescribe medications. Please consult the on-duty doctor, triage nurse, or registration desk staff directly."
-4. LANGUAGE REQUIREMENT:
-   - If requested language is "hi" or query is in Hindi, respond in clear, polite Hindi.
-   - If requested language is "te" or query is in Telugu, respond in clear, polite Telugu.
-   - Otherwise, respond in clear, polite English.
-5. If the query asks for Token details, present the patient's name, assigned department, doctor room, live queue position, estimated wait time, and triage category clearly.
+3. UNKNOWN / MEDICAL ADVICE RULE: If a question asks for medical diagnosis, drug prescriptions, or is completely outside the retrieved knowledge base:
+   - You MUST explicitly decline to prescribe or diagnose, and advise: "I do not have certified clinical authority to diagnose conditions or prescribe medications. Please consult the on-duty doctor or triage nurse directly."
+4. DYNAMIC TOKEN & QUEUE QUESTIONS:
+   - If the user asks about a token ID (e.g. SS-2026-0021 or 21), name, or queue rank, state the patient's name, assigned department, doctor room, live queue position, estimated wait time, and triage category clearly.
+   - If the user asks why someone was called before them, explain that SehatSetu uses deterministic clinical triage (patients with critical oxygen/vitals or severe emergency symptoms receive immediate physician attention).
+   - If the user asks about department waiting times or patient counts, use the live department snapshot figures provided in the retrieved chunks.
+5. MULTILINGUAL INSTRUCTIONS:
+   - If the requested language is "hi" or query is in Hindi/Hinglish, reply in clear, polite Hindi.
+   - If the requested language is "te" or query is in Telugu, reply in clear, polite Telugu.
+   - Otherwise, reply in clear, polite English.
 """
 
 
@@ -82,26 +85,24 @@ def _format_patient_rag_response(
     meta = patient_doc.metadata
     name = meta.get("full_name", "Patient")
     uhid = meta.get("uhid", "UHID-XXXX")
-    age = meta.get("age", "")
-    gender = meta.get("gender", "")
     dept = meta.get("department_name", "General Department")
     room = get_department_room_string(dept, lang)
     urgency = meta.get("urgency_category", "LOW")
     status = meta.get("status", "WAITING")
     rank = meta.get("queue_rank", 1)
     wait = meta.get("estimated_wait_minutes", 15)
-    score = meta.get("urgency_score", 50)
-    patients_ahead = max(0, rank - 1) if rank > 0 else 0
+    patients_ahead = meta.get("patients_ahead", max(0, rank - 1) if rank > 0 else 0)
+    vitals = meta.get("vitals", "Recorded baseline")
 
     sources = retrieved_sources or [patient_doc.title, "Ward A Queue Protocols"]
 
     if lang == "hi":
         urgency_map = {"CRITICAL": "अति गंभीर (तत्काल)", "HIGH": "गंभीर (शीघ्र)", "MODERATE": "मध्यम (सामान्य)", "LOW": "सामान्य (नियमित)", "NEEDS_REVIEW": "समीक्षा आवश्यक"}
         status_map = {"WAITING": "⏳ कतार में प्रतीक्षारत", "CALLED": "🔔 बुलावा हो चुका (कृपया कक्ष में जाएं)", "IN_CONSULTATION": "👨‍⚕️ परामर्श में", "COMPLETED": "✅ पूर्ण", "CANCELLED": "❌ रद्द"}
-        
+
         status_display = status_map.get(status, status)
         urgency_display = urgency_map.get(urgency, urgency)
-        
+
         if status == "CALLED":
             queue_info = f"🔔 आपका नंबर आ चुका है! कृपया सीधे {room} में प्रवेश करें।"
         elif status == "IN_CONSULTATION":
@@ -118,6 +119,7 @@ def _format_patient_rag_response(
             f"• निर्धारित कक्ष: {room}\n"
             f"• ट्राइएज प्राथमिकता: {urgency_display}\n"
             f"• वर्तमान स्थिति: {status_display}\n"
+            f"• महत्वपूर्ण संकेत (Vitals): {vitals}\n"
             f"{queue_info}\n\n"
             f"📢 अगला कदम: कृपया वार्ड ए के प्रतीक्षालय में रहें। बुलावा होने पर अस्पताल में घंटी बजेगी और एसएमएस आएगा।"
         )
@@ -144,6 +146,7 @@ def _format_patient_rag_response(
             f"• కేటాయించిన గది: {room}\n"
             f"• ట్రయాజ్ ప్రాధాన్యత: {urgency_display}\n"
             f"• ప్రస్తుత స్థితి: {status_display}\n"
+            f"• కీలక సూచికలు (Vitals): {vitals}\n"
             f"{queue_info}\n\n"
             f"📢 తదుపరి చర్య: దయచేసి వార్డ్ A వెయిటింగ్ ఏరియాలో ఉండండి. మీ టోకెన్ పిలిచినప్పుడు గంట మోగుతుంది మరియు SMS వస్తుంది."
         )
@@ -165,6 +168,7 @@ def _format_patient_rag_response(
             f"• Consultation Room: {room}\n"
             f"• Triage Priority: {urgency}\n"
             f"• Current Status: {status_display}\n"
+            f"• Clinical Vitals: {vitals}\n"
             f"{queue_info}\n\n"
             f"📢 Next Steps: Please wait in the Ward A seating lounge. An audio chime will ring and an SMS alert will be sent when your token is called."
         )
@@ -193,7 +197,11 @@ def _rag_deterministic_fallback(
     sources = [chunk.document.title for chunk in retrieved_chunks] if retrieved_chunks else ["Civil Hospital Ward A"]
 
     # 1. Clinical safety check / Prescription refusal
-    medical_keywords = ["medicine", "tablet", "pill", "syrup", "dosage", "prescribe", "cure", "disease", "diagnos", "antibiotic", "paracetamol", "painkiller", "dawa", "ilaj", "goli", "మందు", "చికిత్స"]
+    medical_keywords = [
+        "medicine", "tablet", "pill", "syrup", "dosage", "prescribe", "cure", "disease",
+        "diagnos", "antibiotic", "paracetamol", "painkiller", "dawa", "ilaj", "goli",
+        "మందు", "చికిత్స", "మందులు"
+    ]
     if any(k in q for k in medical_keywords):
         if lang == "hi":
             ans = "मैं चिकित्सीय निदान या दवाइयां निर्धारित नहीं कर सकता। कृपया चिकित्सीय सलाह और उपचार के लिए तुरंत उपस्थित डॉक्टर या ट्राइएज नर्स से परामर्श लें।"
@@ -211,74 +219,68 @@ def _rag_deterministic_fallback(
             suggested_action="Consult On-Duty Doctor / Triage Nurse",
         )
 
-    # 2. Check if a specific Token ID was requested in query or uhid parameter
+    # 2. Check if a specific Token ID or Numeric ID was requested in query or uhid parameter
     token_match = re.search(r"\b((?:SS|UHID|TK)-\d{4}-\d+|(?:SS|UHID|TK)-\d+)\b", query, re.IGNORECASE)
+    match_num = re.search(r"\b(?:token|uhid|pass|no\.?|number|id|#)\s*[:#-]?\s*(\d{1,6})\b", query, re.IGNORECASE)
+
     requested_token = token_match.group(1).upper() if token_match else (uhid.upper() if uhid else None)
+    numeric_id = match_num.group(1).strip() if match_num else None
 
-    if requested_token:
-        # Check if the requested token matches any retrieved patient chunk
-        matched_patient_chunk = None
-        for chunk in retrieved_chunks:
-            if chunk.document.category == "PATIENT_RECORD":
-                doc_uhid = str(chunk.document.metadata.get("uhid", "")).upper()
-                if doc_uhid == requested_token or requested_token in doc_uhid:
-                    matched_patient_chunk = chunk
-                    break
-        
-        if matched_patient_chunk:
-            return _format_patient_rag_response(matched_patient_chunk.document, lang, sources)
-        elif token_match:
-            # Explicit token searched was not found
-            cand = token_match.group(1).upper()
-            if lang == "hi":
-                not_found = f"⚠️ टोकन '{cand}' अस्पताल के सक्रिय पंजीकरण रिकॉर्ड में नहीं मिला। कृपया अपने मुद्रित पर्चे की जांच करें या वार्ड ए में पंजीकरण डेस्क पर संपर्क करें।"
-            elif lang == "te":
-                not_found = f"⚠️ టోకెన్ '{cand}' ఆసుపత్రి రిజిస్ట్రేషన్ రికార్డులలో కనుగొనబడలేదు. దయచేసి మీ రిజిస్ట్రేషన్ స్లిప్‌ను తనిఖీ చేయండి లేదా వార్డ్ A రిజిస్ట్రేషన్ డెస్క్‌ను సంప్రదించండి."
-            else:
-                not_found = f"⚠️ Token '{cand}' was not found in active hospital records. Please verify the token number printed on your registration slip, or visit the Registration Desk in Ward A."
-
-            return PatientAssistantResponse(
-                answer=not_found,
-                is_ai_generated=False,
-                model="rag-deterministic-synthesizer",
-                grounded_sources=["Hospital Registration Database"],
-                needs_staff_consultation=True,
-                suggested_action="Visit Registration Desk in Ward A",
-            )
-
-    # 3. If no explicit token was searched but top chunk is a patient record
+    # Search for patient record in retrieved chunks
     for chunk in retrieved_chunks:
         if chunk.document.category == "PATIENT_RECORD":
-            return _format_patient_rag_response(chunk.document, lang, sources)
+            doc_uhid = str(chunk.document.metadata.get("uhid", "")).upper()
+            doc_name = str(chunk.document.metadata.get("full_name", "")).lower()
 
-    # 4. Synthesize answer from top retrieved chunk category
-    top_chunk = retrieved_chunks[0] if retrieved_chunks else None
-    top_cat = top_chunk.document.category if top_chunk else "HOSPITAL_FACILITY"
+            if requested_token and (doc_uhid == requested_token or requested_token in doc_uhid):
+                return _format_patient_rag_response(chunk.document, lang, sources)
 
-    if top_cat == "DEPARTMENT_DIRECTORY" or any(k in q for k in ["department", "room", "where", "ward", "kamra", "kahan", "గది", "విభాగం", "ఎక్కడ", "101", "104"]):
+            if numeric_id and (doc_uhid.endswith(f"-{int(numeric_id):04d}") or doc_uhid.endswith(f"-{numeric_id}")):
+                return _format_patient_rag_response(chunk.document, lang, sources)
+
+            # Check if name in query
+            name_parts = [p for p in doc_name.split() if len(p) > 2]
+            if name_parts and any(p in q for p in name_parts):
+                return _format_patient_rag_response(chunk.document, lang, sources)
+
+    if token_match or (numeric_id and any(k in q for k in ["token", "status", "queue", "rank", "wait", "kab"])):
+        searched = token_match.group(1).upper() if token_match else f"#{numeric_id}"
         if lang == "hi":
-            ans = "सिविल अस्पताल (वार्ड ए) के विभाग एवं कक्ष विवरण:\n• आपातकालीन (ER): कक्ष 101 एवं 102 (24x7 खुला, भूतल)\n• जनरल मेडिसिन (OPD): कक्ष 104 एवं 105 (प्रथम तल)\n• कार्डियोलॉजी (हृदय रोग): कक्ष 108 (प्रथम तल)\n• ऑर्थोपेडिक्स (हड्डी रोग): कक्ष 112 (द्वितीय तल)\n• पीडियाट्रिक्स (बाल रोग): कक्ष 115 (द्वितीय तल)\n(ओपीडी समय: सुबह 8:00 से शाम 4:00 बजे तक)"
+            not_found = f"⚠️ टोकन '{searched}' अस्पताल के सक्रिय पंजीकरण रिकॉर्ड में नहीं मिला। कृपया अपने मुद्रित पर्चे की जांच करें या वार्ड ए में पंजीकरण डेस्क पर संपर्क करें।"
         elif lang == "te":
-            ans = "సివిల్ హాస్పిటల్ (వార్డ్ A) విభాగాలు & గదుల వివరాలు:\n• ఎమర్జెన్సీ (ER): రూమ్ 101 & 102 (24x7 అందుబాటులో, గ్రౌండ్ ఫ్లోర్)\n• జనరల్ మెడిసిన్ (OPD): రూమ్ 104 & 105 (మొదటి అంతస్తు)\n• కార్డియాలజీ: రూమ్ 108 (మొదటి అంతస్తు)\n• ఆర్థోపెడిక్స్: రూమ్ 112 (రెండవ అంతస్తు)\n• పీడియాట్రిక్స్: రూమ్ 115 (రెండవ అంతస్తు)\n(OPD సమయాలు: ఉదయం 8:00 నుండి సాయంత్రం 4:00 వరకు)"
+            not_found = f"⚠️ టోకెన్ '{searched}' ఆసుపత్రి రిజిస్ట్రేషన్ రికార్డులలో కనుగొనబడలేదు. దయచేసి మీ రిజిస్ట్రేషన్ స్లిప్‌ను తనిఖీ చేయండి లేదా వార్డ్ A రిజిస్ట్రేషన్ డెస్క్‌ను సంప్రదించండి."
         else:
-            ans = "Civil Hospital (Ward A) Departments & Room Locations:\n• Emergency (ER): Rooms 101 & 102 (Ground Floor, 24x7 Open)\n• General Medicine: Rooms 104 & 105 (First Floor)\n• Cardiology: Room 108 (First Floor)\n• Orthopedics: Room 112 (Second Floor)\n• Pediatrics: Room 115 (Second Floor)\n(OPD Registration Hours: 8:00 AM - 4:00 PM)"
+            not_found = f"⚠️ Token '{searched}' was not found in active hospital records. Please verify the token number printed on your registration slip, or visit the Registration Desk in Ward A."
 
         return PatientAssistantResponse(
-            answer=ans,
+            answer=not_found,
             is_ai_generated=False,
             model="rag-deterministic-synthesizer",
-            grounded_sources=sources,
-            needs_staff_consultation=False,
-            suggested_action="Proceed to designated department room",
+            grounded_sources=["Hospital Registration Database"],
+            needs_staff_consultation=True,
+            suggested_action="Visit Registration Desk in Ward A",
         )
 
-    if top_cat == "TRIAGE_PROTOCOL" or any(k in q for k in ["priority", "priorit", "triage", "score", "rule", "critical", "called first", "order", "प्राथमिकता", "ప్రాధాన్యత"]):
+    # 3. Dynamic Department Live Snapshot / Wait times queries
+    for chunk in retrieved_chunks:
+        if chunk.document.category == "DEPARTMENT_SNAPSHOT":
+            return PatientAssistantResponse(
+                answer=chunk.document.content,
+                is_ai_generated=False,
+                model="rag-deterministic-synthesizer",
+                grounded_sources=sources,
+                needs_staff_consultation=False,
+                suggested_action="Check Live Queue Display",
+            )
+
+    # 4. Triage Priority & "Why called before me"
+    if any(k in q for k in ["priority", "priorit", "triage", "score", "critical", "called first", "order", "urgent", "before me", "pahle", "ముందు", "प्राथमिकता", "క్యు"]):
         if lang == "hi":
-            ans = "सेहत सेतु में कतार का क्रम ट्राइएज गंभीरता (Triage Urgency) और आगमन समय पर आधारित होता है:\n1. अति गंभीर (CRITICAL): ऑक्सीजन < 92% या सीने में तेज दर्द वाले रोगियों को तत्काल देखा जाता है।\n2. गंभीर (HIGH): तेज बुखार या तीव्र हृदय गति (~10-15 मिनट)।\n3. मध्यम (MODERATE): सामान्य दर्द या संक्रमण (~25-40 मिनट)।\n4. सामान्य (LOW): हल्की तकलीफें (~45-60 मिनट)।"
+            ans = "सेहत सेतु में कतार का क्रम ट्राइएज गंभीरता (Triage Urgency) और आगमन समय पर आधारित होता है:\n• अति गंभीर (CRITICAL): ऑक्सीजन < 92% या सीने में तेज दर्द वाले रोगियों को तत्काल देखा जाता है ताकि जान बचाई जा सके।\n• गंभीर (HIGH): तेज बुखार या तीव्र हृदय गति (~10-15 मिनट)।\n• मध्यम (MODERATE): सामान्य दर्द या संक्रमण (~25-40 मिनट)।\n• सामान्य (LOW): हल्की तकलीफें (~45-60 मिनट)।"
         elif lang == "te":
-            ans = "సేహత్‌సేతులో క్యూ క్రమం ట్రయాజ్ అత్యవసరత మరియు వచ్చిన సమయం ఆధారంగా నిర్ణయించబడుతుంది:\n1. అత్యవసరం (CRITICAL): ఆక్సిజన్ < 92% లేదా గుండె నొప్పి ఉన్న రోగులకు తక్షణ ప్రాధాన్యత.\n2. తీవ్రమైనది (HIGH): తీవ్ర జ్వరం లేదా గుండె వేగం (~10-15 నిమిషాలు).\n3. మధ్యస్థం (MODERATE): సాధారణ ఇన్ఫెక్షన్లు (~25-40 నిమిషాలు).\n4. సాధారణం (LOW): సాధారణ సమస్యలు (~45-60 నిమిషాలు)."
+            ans = "సేహత్‌సేతులో క్యూ క్రమం ట్రయాజ్ అత్యవసరత మరియు వచ్చిన సమయం ఆధారంగా నిర్ణయించబడుతుంది:\n• అత్యవసరం (CRITICAL): ఆక్సిజన్ < 92% లేదా గుండె నొప్పి ఉన్న రోగులకు ప్రాణాపాయ నివారణకు తక్షణ ప్రాధాన్యత.\n• తీవ్రమైనది (HIGH): తీవ్ర జ్వరం లేదా గుండె వేగం (~10-15 నిమిషాలు).\n• మధ్యస్థం (MODERATE): సాధారణ ఇన్ఫెక్షన్లు (~25-40 నిమిషాలు).\n• సాధారణం (LOW): సాధారణ సమస్యలు (~45-60 నిమిషాలు)."
         else:
-            ans = "SehatSetu prioritizes patients dynamically based on clinical triage urgency score and arrival duration:\n1. CRITICAL: Immediate doctor evaluation (e.g. SpO2 < 92%, acute cardiac distress).\n2. HIGH: Urgent care indicated (~10-15 min wait).\n3. MODERATE: Standard care indicated (~25-40 min wait).\n4. LOW: Routine outpatient evaluation (~45-60 min wait)."
+            ans = "SehatSetu prioritizes patients dynamically based on clinical triage urgency score and arrival duration:\n• Life-Saving Priority: Patients with critical vitals (e.g. SpO2 < 92%, acute cardiac distress) are called immediately.\n• HIGH: Urgent care indicated (~10-15 min wait).\n• MODERATE: Standard care indicated (~25-40 min wait).\n• LOW: Routine outpatient evaluation (~45-60 min wait)."
 
         return PatientAssistantResponse(
             answer=ans,
@@ -289,7 +291,26 @@ def _rag_deterministic_fallback(
             suggested_action="Review Triage Rules Policy",
         )
 
-    if top_cat == "EMERGENCY_HOTLINE" or any(k in q for k in ["ambulance", "emergency", "contact", "phone", "number", "help", "108", "102", "ఫోన్", "అంబులెన్స్", "आपातकालीन"]):
+    # 5. Department and Room Directory
+    if any(k in q for k in ["department", "room", "where", "ward", "kamra", "kahan", "floor", "pharmacy", "lab", "గది", "విభాగం", "ఎక్కడ", "101", "104", "108", "112", "115"]):
+        if lang == "hi":
+            ans = "सिविल अस्पताल (वार्ड ए) के विभाग एवं कक्ष विवरण:\n• आपातकालीन (ER): कक्ष 101 एवं 102 (24x7 खुला, भूतल)\n• जनरल मेडिसिन (OPD): कक्ष 104 एवं 105 (प्रथम तल)\n• कार्डियोलॉजी (हृदय रोग): कक्ष 108 (प्रथम तल)\n• ऑर्थोपेडिक्स (हड्डी रोग): कक्ष 112 (द्वितीय तल)\n• पीडियाट्रिक्स (बाल रोग): कक्ष 115 (द्वितीय तल)\n• फार्मेसी (दवा खाना): भूतल (24x7 खुला)\n• पैथोलॉजी लैब: कक्ष 103 (भूतल)"
+        elif lang == "te":
+            ans = "సివిల్ హాస్పిటల్ (వార్డ్ A) విభాగాలు & గదుల వివరాలు:\n• ఎమర్జెన్సీ (ER): రూమ్ 101 & 102 (24x7 అందుబాటులో, గ్రౌండ్ ఫ్లోర్)\n• జనరల్ మెడిసిన్ (OPD): రూమ్ 104 & 105 (మొదటి అంతస్తు)\n• కార్డియాలజీ: రూమ్ 108 (మొదటి అంతస్తు)\n• ఆర్థోపెడిక్స్: రూమ్ 112 (రెండవ అంతస్తు)\n• పీడియాట్రిక్స్: రూమ్ 115 (రెండవ అంతస్తు)\n• ఫార్మసీ: గ్రౌండ్ ఫ్లోర్ (24x7 అందుబాటులో)\n• పాథాలజీ ల్యాబ్: రూమ్ 103 (గ్రౌండ్ ఫ్లోర్)"
+        else:
+            ans = "Civil Hospital (Ward A) Departments & Facility Locations:\n• Emergency (ER): Rooms 101 & 102 (Ground Floor, 24x7 Open)\n• General Medicine: Rooms 104 & 105 (First Floor)\n• Cardiology: Room 108 (First Floor)\n• Orthopedics: Room 112 (Second Floor)\n• Pediatrics: Room 115 (Second Floor)\n• Pharmacy (Medicines): Ground Floor near ER (24x7 Open)\n• Diagnostic Lab & Blood Collection: Room 103 (Ground Floor)"
+
+        return PatientAssistantResponse(
+            answer=ans,
+            is_ai_generated=False,
+            model="rag-deterministic-synthesizer",
+            grounded_sources=sources,
+            needs_staff_consultation=False,
+            suggested_action="Proceed to designated department room",
+        )
+
+    # 6. Emergency Helpline
+    if any(k in q for k in ["ambulance", "emergency", "contact", "phone", "number", "help", "108", "102", "ఫోన్", "అంబులెన్స్", "आपातकालीन", "हेल्प"]):
         if lang == "hi":
             ans = "आपातकालीन सेवाएं 24x7 उपलब्ध हैं। आपातकालीन एम्बुलेंस: 108 या 102। सिविल अस्पताल हेल्पडेस्क: 011-2399-4400। आपातकाल की स्थिति में सीधे कक्ष 101 (ER) पर जाएं।"
         elif lang == "te":
@@ -306,7 +327,8 @@ def _rag_deterministic_fallback(
             suggested_action="Call 108 / 102 in critical emergency",
         )
 
-    if top_cat == "VITALS_REFERENCE" or any(k in q for k in ["vital", "spo2", "oxygen", "pulse", "heart rate", "bp", "blood pressure", "temp", "fever", "रक्तचाप", "ఆక్సిజన్"]):
+    # 7. Vitals Reference
+    if any(k in q for k in ["vital", "spo2", "oxygen", "pulse", "heart rate", "bp", "blood pressure", "temp", "fever", "रक्तचाप", "ఆక్సిజన్"]):
         if lang == "hi":
             ans = "सामान्य महत्वपूर्ण संकेत (केवल सामान्य जानकारी के लिए):\n• ऑक्सीजन (SpO2): 95% - 100% (92% से कम पर डॉक्टर तुरंत देखते हैं)\n• हृदय गति (Pulse): 60 - 100 bpm\n• रक्तचाप (BP): ~120/80 mmHg\n• तापमान: 97.8°F - 99.1°F (बुखार > 100.4°F)"
         elif lang == "te":
@@ -323,7 +345,8 @@ def _rag_deterministic_fallback(
             suggested_action="Consult clinician for personalized readings",
         )
 
-    if top_cat == "VISIT_CHECKLIST" or any(k in q for k in ["document", "bring", "carry", "aadhaar", "card", "kagaz", "తీసుకురావాలి", "పత్రాలు", "दस्तावेज"]):
+    # 8. Document Checklist
+    if any(k in q for k in ["document", "bring", "carry", "aadhaar", "card", "kagaz", "తీసుకురావాలి", "పత్రాలు", "दस्तावेज"]):
         if lang == "hi":
             ans = "अस्पताल में परामर्श के लिए निम्नलिखित साथ रखें:\n1. आपका मुद्रित टोकन पर्चा या मोबाइल एसएमएस\n2. पहचान पत्र (आधार कार्ड / आयुष्मान भारत कार्ड)\n3. पुराने पर्चे, दवाइयां और टेस्ट रिपोर्ट"
         elif lang == "te":
@@ -416,7 +439,7 @@ async def summarize_chief_complaint(complaint: str) -> AISummarizeResponse:
 async def solve_patient_doubt(request: PatientAssistantRequest) -> PatientAssistantResponse:
     """
     Production RAG Pipeline for Patient Assistant:
-    1. Retrieval: Hybrid TF-IDF vector + exact-match retrieval over dynamic patient records & hospital knowledge.
+    1. Retrieval: Multi-signal hybrid TF-IDF + exact token/name match + live department snapshot extraction.
     2. Augmentation: Injects retrieved chunks and clinical safety constraints into the grounded prompt.
     3. Generation: Invokes Gemini LLM (or deterministic RAG synthesizer fallback) for accurate, grounded responses.
     """
@@ -424,8 +447,8 @@ async def solve_patient_doubt(request: PatientAssistantRequest) -> PatientAssist
     lang = request.language or "en"
     uhid = request.patient_uhid
 
-    # 1. RAG Retrieval Phase: Retrieve Top-4 most relevant chunks
-    retrieved_chunks = rag_retriever.retrieve(query=query, uhid=uhid, top_k=4)
+    # 1. RAG Retrieval Phase: Retrieve Top-5 most relevant chunks
+    retrieved_chunks = rag_retriever.retrieve(query=query, uhid=uhid, top_k=5)
     sources = [c.document.title for c in retrieved_chunks]
 
     api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
@@ -437,16 +460,16 @@ async def solve_patient_doubt(request: PatientAssistantRequest) -> PatientAssist
             context_blocks = []
             for i, chunk in enumerate(retrieved_chunks, 1):
                 context_blocks.append(
-                    f"--- RETRIEVED CHUNK {i} (Title: {chunk.document.title}, Category: {chunk.document.category}, Relevance: {chunk.similarity_score:.2f}) ---\n"
+                    f"--- RETRIEVED CHUNK {i} (Title: {chunk.document.title}, Category: {chunk.document.category}, Score: {chunk.similarity_score:.2f}) ---\n"
                     f"{chunk.document.content}\n"
                 )
             retrieved_context_str = "\n".join(context_blocks)
 
             prompt_text = (
                 f"{RAG_GROUNDED_PROMPT_TEMPLATE.format(retrieved_context=retrieved_context_str)}\n\n"
-                f"REQUESTED LANGUAGE: {lang}\n"
-                f"PATIENT QUESTION:\n\"{query}\"\n\n"
-                f"Answer concisely, politely, and strictly based on the retrieved chunks above."
+                f"USER QUERY: \"{query}\"\n"
+                f"DESIRED RESPONSE LANGUAGE: {lang}\n\n"
+                f"Provide a clear, accurate, polite, grounded response using the retrieved knowledge chunks above."
             )
 
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.AI_MODEL_NAME}:generateContent?key={api_key}"
@@ -459,11 +482,11 @@ async def solve_patient_doubt(request: PatientAssistantRequest) -> PatientAssist
                 ],
                 "generationConfig": {
                     "temperature": 0.1,
-                    "maxOutputTokens": 350,
+                    "maxOutputTokens": 400,
                 },
             }
 
-            async with httpx.AsyncClient(timeout=4.0) as client:
+            async with httpx.AsyncClient(timeout=4.5) as client:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
