@@ -216,3 +216,28 @@ export interface AISummarizeResponse {
   safety_disclaimer: string;
 }
 
+// Patient AI Assistant Interfaces
+export interface PatientAssistantRequest {
+  question: string;
+  language?: 'en' | 'hi' | 'te';
+  patient_uhid?: string;
+  patient_context?: {
+    queue_position?: number;
+    estimated_wait_minutes?: number;
+    department_name?: string;
+    status?: string;
+    uhid?: string;
+  };
+}
+
+export interface PatientAssistantResponse {
+  answer: string;
+  is_ai_generated: boolean;
+  model: string;
+  grounded_sources: string[];
+  needs_staff_consultation: boolean;
+  suggested_action?: string;
+  safety_notice: string;
+}
+
+

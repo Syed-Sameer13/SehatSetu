@@ -4,12 +4,13 @@ import { Sidebar } from './Sidebar';
 import { TopNavbar } from './TopNavbar';
 import { HealthBanner } from '../common/HealthBanner';
 import { SMSAlertToast } from '../common/SMSAlertToast';
+import { PatientAIAssistantWidget } from '../common/PatientAIAssistantWidget';
 import { useRealtimeSubscription } from '../../hooks/useRealtimeQueue';
 
 export const DashboardLayout: React.FC = () => {
   useRealtimeSubscription();
   return (
-    <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+    <div className="flex h-screen w-full bg-slate-50 overflow-hidden relative">
       {/* Sidebar */}
       <Sidebar />
 
@@ -22,6 +23,9 @@ export const DashboardLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Grounded AI Patient Assistant */}
+      <PatientAIAssistantWidget />
     </div>
   );
 };

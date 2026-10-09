@@ -1,5 +1,10 @@
 import { request } from './apiClient';
-import { AISummarizeRequest, AISummarizeResponse } from '../types';
+import {
+  AISummarizeRequest,
+  AISummarizeResponse,
+  PatientAssistantRequest,
+  PatientAssistantResponse,
+} from '../types';
 
 export const aiService = {
   summarizeSymptoms: async (payload: AISummarizeRequest): Promise<AISummarizeResponse> => {
@@ -8,4 +13,12 @@ export const aiService = {
       body: JSON.stringify(payload),
     });
   },
+
+  askPatientAssistant: async (payload: PatientAssistantRequest): Promise<PatientAssistantResponse> => {
+    return request<PatientAssistantResponse>('/ai/patient-assistant', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
+

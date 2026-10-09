@@ -353,6 +353,26 @@ export const PatientTrackerPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Grounded AI Assistant Guidance Card */}
+          <div className="bg-gradient-to-r from-teal-900 via-teal-950 to-slate-900 p-4 rounded-xl text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm border border-teal-700/50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/40 flex items-center justify-center text-teal-300 font-bold shrink-0">
+                🤖
+              </div>
+              <div>
+                <div className="font-bold text-xs sm:text-sm text-teal-100 flex items-center gap-2">
+                  <span>Have a doubt about your Token or Visit?</span>
+                  <span className="text-[10px] bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-full border border-teal-500/30">
+                    Grounded AI
+                  </span>
+                </div>
+                <div className="text-[11px] text-teal-300/80 mt-0.5">
+                  Ask our Gemini-grounded Hospital AI Assistant at the bottom-right for instant answers in English, हिन्दी, or తెలుగు.
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Action buttons */}
           <div className="flex items-center justify-between pt-2">
             <button
