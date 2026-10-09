@@ -133,47 +133,111 @@ def _patient_assistant_rule_fallback(
         )
 
     # 2. Token / Queue / Wait Time Queries
-    if any(k in q for k in ["token", "queue", "wait", "rank", "position", "turn", "katar", "kab", "line", "సమయం", "టోకెన్", "క్యూ", "टोकन", "कतार", "प्रतीक्षा"]):
+    if any(k in q for k in ["token", "queue", "wait", "rank", "position", "turn", "katar", "kab", "line", "సమయం", "టోకెన్", "క్యూ", "ట్రాక్", "टोकन", "कतार", "प्रतीक्षा", "नंबर", "कब"]):
         token_str = uhid or (context.get("uhid") if context else "UHID-2026-0089")
         pos_str = context.get("queue_position", 1) if context else 1
         wait_str = context.get("estimated_wait_minutes", 15) if context else 15
+        dept_str = context.get("department_name", "General Medicine") if context else "General Medicine"
+        status_str = context.get("status", "WAITING") if context else "WAITING"
 
-        if lang == "hi":
-            ans = f"आपका टोकन {token_str} है। कतार में आपकी वर्तमान स्थिति #{pos_str} है, और अनुमानित प्रतीक्षा समय लगभग ~{wait_str} मिनट है। आपका नंबर आने पर घंटी बजेगी और आपको एसएमएस प्राप्त होगा।"
-        elif lang == "te":
-            ans = f"మీ టోకెన్ {token_str}. ప్రస్తుత క్యూ స్థానం #{pos_str}, మరియు సుమారు నిరీక్షణ సమయం ~{wait_str} నిమిషాలు. మీ టోకెన్ పిలిచినప్పుడు గంట మోగుతుంది మరియు SMS వస్తుంది."
+        if status_str == "CALLED":
+            if lang == "hi":
+                ans = f"🔔 आपका टोकन {token_str} बुलाया जा चुका है! कृपया तुरंत {dept_str} (Consultation Room 1) में उपस्थित हों।"
+            elif lang == "te":
+                ans = f"🔔 మీ టోకెన్ {token_str} పిలవబడింది! దయచేసి వెంటనే {dept_str} (Consultation Room 1) వద్దకు వెళ్లండి."
+            else:
+                ans = f"🔔 Your token {token_str} has been CALLED! Please proceed immediately to {dept_str} (Consultation Room 1)."
         else:
-            ans = f"Your token is {token_str}. You are currently at queue position #{pos_str} with an estimated waiting duration of ~{wait_str} minutes. When called, a chime will ring and an SMS will be sent to your phone."
+            if lang == "hi":
+                ans = f"रोगी टोकन विवरण:\n• आवंटित टोकन: {token_str}\n• लक्षित विभाग: {dept_str}\n• सक्रिय कतार स्थिति: #{pos_str}\n• अनुमानित प्रतीक्षा समय: ~{wait_str} मिनट\n(आपका नंबर आने पर अस्पताल में घंटी बजेगी और आपके मोबाइल पर एसएमएस भेजा जाएगा।)"
+            elif lang == "te":
+                ans = f"రోగి టోకెన్ సమాచారం:\n• కేటాయించిన టోకెన్: {token_str}\n• విభాగం: {dept_str}\n• క్యూ స్థానం: #{pos_str}\n• సుమారు నిరీక్షణ సమయం: ~{wait_str} నిమిషాలు\n(మీ టోకెన్ పిలిచినప్పుడు గంట మోగుతుంది మరియు మొబైల్‌కు SMS వస్తుంది.)"
+            else:
+                ans = f"Patient Live Queue Status:\n• Assigned Token: {token_str}\n• Target Department: {dept_str}\n• Current Queue Rank: #{pos_str}\n• Estimated Wait Duration: ~{wait_str} mins\n(When called, a chime will sound and an SMS alert will be dispatched to your phone.)"
 
         return PatientAssistantResponse(
             answer=ans,
             is_ai_generated=False,
             model="deterministic-grounded-rules",
-            grounded_sources=["Live Queue Engine", "Token Protocol"],
+            grounded_sources=["Live Queue Engine", "Token Protocol", "Civil Hospital Ward A"],
             needs_staff_consultation=False,
             suggested_action="Track Live Pass on Patient Portal",
         )
 
-    # 3. Department / Room Number Queries
-    if any(k in q for k in ["department", "room", "where", "ward", "cardiology", "orthopedic", "pediatric", "er", "emergency", "general", "kamra", "kahan", "గది", "విభాగం", "ఎక్కడ", "ఎమర్జెన్సీ", "विभाग", "कक्ष", "कहाँ", "कहा", "आपातकालीन", "आपातकाल"]):
+    # 3. Triage Prioritization & "Why is someone called before me?"
+    if any(k in q for k in ["priority", "priorit", "triage", "score", "rule", "critical", "called first", "first", "order", "urgent", "प्राथमिकता", "ट्राइएज", "ప్రాధాన్యత", "ముందు"]):
         if lang == "hi":
-            ans = "अस्पताल विभाग एवं कक्ष विवरण:\n• आपातकालीन (ER): कक्ष 101/102 (24x7 खुला)\n• जनरल मेडिसिन (OPD): कक्ष 104/105\n• कार्डियोलॉजी (हृदय रोग): कक्ष 108\n• ऑर्थोपेडिक्स (हड्डी रोग): कक्ष 112\n• पीडियाट्रिक्स (बाल रोग): कक्ष 115\n(ओपीडी समय: सुबह 8:00 से शाम 4:00 बजे तक)"
+            ans = "सेहत सेतु में कतार का क्रम ट्राइएज गंभीरता (Triage Urgency) और आगमन समय पर आधारित होता है:\n1. अति गंभीर (CRITICAL): ऑक्सीजन < 92% या सीने में तेज दर्द वाले रोगियों को तत्काल देखा जाता है।\n2. गंभीर (HIGH): तेज बुखार या तीव्र हृदय गति (~10-15 मिनट)।\n3. मध्यम (MODERATE): सामान्य दर्द या संक्रमण (~25-40 मिनट)।\n4. सामान्य (LOW): हल्की तकलीफें (~45-60 मिनट)।"
         elif lang == "te":
-            ans = "ఆసుపత్రి విభాగాలు & గదుల వివరాలు:\n• ఎమర్జెన్సీ (ER): రూమ్ 101/102 (24x7 అందుబాటులో)\n• జనరల్ మెడిసిన్ (OPD): రూమ్ 104/105\n• కార్డియాలజీ: రూమ్ 108\n• ఆర్థోపెడిక్స్: రూమ్ 112\n• పీడియాట్రిక్స్ (పిల్లల విభాగం): రూమ్ 115\n(OPD సమయాలు: ఉదయం 8:00 నుండి సాయంత్రం 4:00 వరకు)"
+            ans = "సేహత్‌సేతులో క్యూ క్రమం ట్రయాజ్ అత్యవసరత మరియు వచ్చిన సమయం ఆధారంగా నిర్ణయించబడుతుంది:\n1. అత్యవసరం (CRITICAL): ఆక్సిజన్ < 92% లేదా గుండె నొప్పి ఉన్న రోగులకు తక్షణ ప్రాధాన్యత.\n2. తీవ్రమైనది (HIGH): తీవ్ర జ్వరం లేదా గుండె వేగం (~10-15 నిమిషాలు).\n3. మధ్యస్థం (MODERATE): సాధారణ ఇన్ఫెక్షన్లు (~25-40 నిమిషాలు).\n4. సాధారణం (LOW): సాధారణ సమస్యలు (~45-60 నిమిషాలు)."
         else:
-            ans = "Hospital Departments & Locations (Civil Hospital • Ward A):\n• Emergency (ER): Rooms 101 & 102 (24x7 Open)\n• General Medicine: Rooms 104 & 105\n• Cardiology: Room 108\n• Orthopedics: Room 112\n• Pediatrics: Room 115\n(OPD Hours: 8:00 AM - 4:00 PM)"
+            ans = "SehatSetu prioritizes patients dynamically based on clinical triage urgency score and arrival duration:\n1. CRITICAL: Immediate doctor evaluation (e.g. SpO2 < 92%, acute cardiac distress).\n2. HIGH: Urgent care indicated (~10-15 min wait).\n3. MODERATE: Standard care indicated (~25-40 min wait).\n4. LOW: Routine outpatient evaluation (~45-60 min wait)."
 
         return PatientAssistantResponse(
             answer=ans,
             is_ai_generated=False,
             model="deterministic-grounded-rules",
-            grounded_sources=["Hospital Facility Directory"],
+            grounded_sources=["Deterministic Triage Rules Engine", "Clinical Decision Support"],
+            needs_staff_consultation=False,
+            suggested_action="Review Triage Rules Policy",
+        )
+
+    # 4. Department / Room Number Queries
+    if any(k in q for k in ["department", "room", "where", "ward", "cardiology", "orthopedic", "pediatric", "er", "emergency", "general", "kamra", "kahan", "గది", "విభాగం", "ఎక్కడ", "ఎమర్జెన్సీ", "विभाग", "कक्ष", "कहाँ", "कहा", "आपातकालीन", "आपातकाल"]):
+        if lang == "hi":
+            ans = "सिविल अस्पताल (वार्ड ए) के विभाग एवं कक्ष विवरण:\n• आपातकालीन (ER): कक्ष 101 एवं 102 (24x7 खुला)\n• जनरल मेडिसिन (OPD): कक्ष 104 एवं 105\n• कार्डियोलॉजी (हृदय रोग): कक्ष 108\n• ऑर्थोपेडिक्स (हड्डी रोग): कक्ष 112\n• पीडियाट्रिक्स (बाल रोग): कक्ष 115\n(ओपीडी समय: सुबह 8:00 से शाम 4:00 बजे तक)"
+        elif lang == "te":
+            ans = "సివిల్ హాస్పిటల్ (వార్డ్ A) విభాగాలు & గదుల వివరాలు:\n• ఎమర్జెన్సీ (ER): రూమ్ 101 & 102 (24x7 అందుబాటులో)\n• జనరల్ మెడిసిన్ (OPD): రూమ్ 104 & 105\n• కార్డియాలజీ: రూమ్ 108\n• ఆర్థోపెడిక్స్: రూమ్ 112\n• పీడియాట్రిక్స్ (పిల్లల విభాగం): రూమ్ 115\n(OPD సమయాలు: ఉదయం 8:00 నుండి సాయంత్రం 4:00 వరకు)"
+        else:
+            ans = "Civil Hospital (Ward A) Departments & Room Locations:\n• Emergency (ER): Rooms 101 & 102 (24x7 Open)\n• General Medicine: Rooms 104 & 105\n• Cardiology: Room 108\n• Orthopedics: Room 112\n• Pediatrics: Room 115\n(OPD Registration Hours: 8:00 AM - 4:00 PM)"
+
+        return PatientAssistantResponse(
+            answer=ans,
+            is_ai_generated=False,
+            model="deterministic-grounded-rules",
+            grounded_sources=["Hospital Facility Directory", "Ward A Map"],
             needs_staff_consultation=False,
             suggested_action="Proceed to designated department room",
         )
 
-    # 4. Emergency / Ambulance Contacts
-    if any(k in q for k in ["ambulance", "emergency", "contact", "phone", "number", "help", "aapatkal", "ఫోన్", "అంబులెన్స్"]):
+    # 5. SMS Notification & Calling System
+    if any(k in q for k in ["sms", "message", "notification", "chime", "sound", "bell", "alert", "सूचना", "घंटी", "సందేశం", "గంట"]):
+        if lang == "hi":
+            ans = "बुलावे एवं सूचना की प्रक्रिया:\n1. जब डॉक्टर आपका नंबर लगाते हैं, तो अस्पताल वार्ड में ऑडियो डिंग-डोंग घंटी बजती है।\n2. आपके पंजीकृत मोबाइल नंबर पर तुरंत एसएमएस भेजा जाता है।\n3. आपके डिजिटल पास पर स्थिति CALLED में बदल जाती है और परामर्श कक्ष का नंबर दिखाई देता है।"
+        elif lang == "te":
+            ans = "కాల్ & నోటిఫికేషన్ ప్రక్రియ:\n1. డాక్టర్ మీ టోకెన్ పిలిచినప్పుడు, వార్డ్‌లో డింగ్-డాంగ్ గంట మోగుతుంది.\n2. మీ రిజిస్టర్డ్ మొబైల్ నంబర్‌కు తక్షణ SMS పంపబడుతుంది.\n3. మీ డిజిటల్ పాస్‌లో స్టేటస్ CALLED గా మారుతుంది మరియు కన్సల్టేషన్ రూమ్ వివరాలు కనిపిస్తాయి."
+        else:
+            ans = "Notification & Patient Calling System:\n1. When the duty doctor calls your turn, an audible hospital chime rings in Ward A.\n2. An automated SMS notification is dispatched to your registered mobile number.\n3. Your Live Token Pass status turns to CALLED with the designated Consultation Room."
+
+        return PatientAssistantResponse(
+            answer=ans,
+            is_ai_generated=False,
+            model="deterministic-grounded-rules",
+            grounded_sources=["SMS Broadcast System", "Hospital Realtime Engine"],
+            needs_staff_consultation=False,
+            suggested_action="Keep phone active and watch the display",
+        )
+
+    # 6. About SehatSetu / Hospital Intro
+    if any(k in q for k in ["sehatsetu", "about", "what is", "hospital", "ward a", "अस्पताल", "सेहत सेतु", "ఆసుపత్రి", "సేహత్‌సేతు"]):
+        if lang == "hi":
+            ans = "सेहत सेतु (SehatSetu) सिविल अस्पताल • वार्ड ए का स्मार्ट रोगी कतार एवं आपातकालीन ट्राइएज प्लेटफॉर्म है। यह पारदर्शी, नियम-आधारित ट्राइएज और वास्तविक समय में कतार प्रबंधन प्रदान करता है।"
+        elif lang == "te":
+            ans = "సేహత్‌సేతు (SehatSetu) అనేది సివిల్ హాస్పిటల్ • వార్డ్ A యొక్క స్మార్ట్ పేషెంట్ క్యూ మరియు ఎమర్జెన్సీ ట్రయాజ్ వ్యవస్థ. ఇది రియల్-టైమ్ క్యూ నిర్వహణ మరియు వైద్య సహాయాన్ని అందిస్తుంది."
+        else:
+            ans = "SehatSetu is the Smart Patient Queue & Emergency Triage Platform deployed at Civil Hospital • Ward A. It provides deterministic, clinician-auditable triage prioritization and live token tracking."
+
+        return PatientAssistantResponse(
+            answer=ans,
+            is_ai_generated=False,
+            model="deterministic-grounded-rules",
+            grounded_sources=["Hospital Overview", "Ayushman Bharat Digital Health"],
+            needs_staff_consultation=False,
+            suggested_action="Explore Overview Dashboard",
+        )
+
+    # 7. Emergency / Ambulance Contacts
+    if any(k in q for k in ["ambulance", "emergency", "contact", "phone", "number", "help", "aapatkal", "ఫోన్", "అంబులెన్స్", "ఆపద"]):
         if lang == "hi":
             ans = "आपातकालीन सेवाएं 24x7 उपलब्ध हैं। आपातकालीन एम्बुलेंस: 108 या 102। सिविल अस्पताल हेल्पडेस्क: 011-2399-4400। आपातकाल की स्थिति में सीधे कक्ष 101 (ER) पर जाएं।"
         elif lang == "te":
@@ -190,8 +254,8 @@ def _patient_assistant_rule_fallback(
             suggested_action="Call 108 / 102 in critical emergency",
         )
 
-    # 5. Normal Vitals Reference
-    if any(k in q for k in ["vital", "spo2", "oxygen", "pulse", "heart rate", "bp", "blood pressure", "temp", "fever", "బ్లడ్ ప్రెజర్", "ఆక్సిజన్"]):
+    # 8. Normal Vitals Reference
+    if any(k in q for k in ["vital", "spo2", "oxygen", "pulse", "heart rate", "bp", "blood pressure", "temp", "fever", "బ్లడ్ ప్రెజర్", "ఆక్సిజన్", "రక్తపోటు", "నాడి", "ऑक्सीजन", "रक्तचाप", "नाड़ी", "बुखार"]):
         if lang == "hi":
             ans = "सामान्य महत्वपूर्ण संकेत (केवल सामान्य जानकारी के लिए):\n• ऑक्सीजन (SpO2): 95% - 100% (92% से कम पर डॉक्टर तुरंत देखते हैं)\n• हृदय गति (Pulse): 60 - 100 bpm\n• रक्तचाप (BP): ~120/80 mmHg\n• तापमान: 97.8°F - 99.1°F (बुखार > 100.4°F)"
         elif lang == "te":
@@ -208,8 +272,8 @@ def _patient_assistant_rule_fallback(
             suggested_action="Consult clinician for personalized readings",
         )
 
-    # 6. Documents / Checklist / What to bring
-    if any(k in q for k in ["document", "bring", "carry", "aadhaar", "card", "kagaz", "తీసుకురావాలి", "పత్రాలు"]):
+    # 9. Documents / Checklist / What to bring
+    if any(k in q for k in ["document", "bring", "carry", "aadhaar", "card", "kagaz", "తీసుకురావాలి", "పత్రాలు", "दस्तावेज", "कागज", "आईडी"]):
         if lang == "hi":
             ans = "अस्पताल में परामर्श के लिए निम्नलिखित साथ रखें:\n1. आपका मुद्रित टोकन पर्चा या मोबाइल एसएमएस\n2. पहचान पत्र (आधार कार्ड / आयुष्मान भारत कार्ड)\n3. पुराने पर्चे, दवाइयां और टेस्ट रिपोर्ट"
         elif lang == "te":
@@ -226,7 +290,7 @@ def _patient_assistant_rule_fallback(
             suggested_action="Keep token and ID ready",
         )
 
-    # 7. Default Unknown / Out-of-Scope Query -> Explicit guidance to consult hospital staff
+    # 10. Default Unknown / Out-of-Scope Query -> Explicit guidance to consult hospital staff
     if lang == "hi":
         ans = "मेरे पास इस विषय की प्रमाणित अस्पताल जानकारी उपलब्ध नहीं है। कृपया सही जानकारी और मार्गदर्शन के लिए अस्पताल के पंजीकरण डेस्क (Registration Desk) या उपस्थित अस्पताल कर्मचारियों से संपर्क करें।"
     elif lang == "te":

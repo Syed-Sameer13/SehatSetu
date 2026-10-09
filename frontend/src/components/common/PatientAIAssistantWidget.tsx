@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Bot,
   Send,
@@ -7,6 +8,7 @@ import {
   ShieldAlert,
   AlertTriangle,
 } from 'lucide-react';
+import { fetchQueue } from '../../services/queueService';
 import { aiService } from '../../services/aiService';
 import { useApp } from '../../context/AppContext';
 import { PatientAssistantResponse } from '../../types';
@@ -29,14 +31,32 @@ export const PatientAIAssistantWidget: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Fetch live queue data to provide real-time patient context
+  const { data: queue } = useQuery({
+    queryKey: ['queue-assistant-live'],
+    queryFn: () => fetchQueue(undefined, 'ALL'),
+    refetchInterval: 10000,
+  });
+
+  // Calculate live patient stats
+  const activeUhid = currentUser?.uhid || 'UHID-2026-0089';
+  const liveEntry = queue?.find((e) => e.uhid.toUpperCase() === activeUhid.toUpperCase());
+  const deptQueue = queue?.filter(
+    (e) => e.department_id === liveEntry?.department_id && e.status === 'WAITING'
+  ) || [];
+  const patientRank = liveEntry
+    ? deptQueue.findIndex((e) => e.visit_id === liveEntry.visit_id) + 1
+    : 1;
+  const liveWaitMins = Math.max(5, (patientRank || 1) * 8);
+
   // Initialize with greeting
   useEffect(() => {
     const greetingText =
       language === 'hi'
-        ? `नमस्ते ${currentUser?.name || ''}! मैं सेहत सेतु का अस्पताल सूचना सहायक हूँ। आप टोकन, प्रतीक्षा समय, विभाग या अस्पताल नियमों के बारे में कोई भी प्रश्न पूछ सकते हैं।`
+        ? `नमस्ते ${currentUser?.name || ''}! मैं सेहत सेतु का अस्पताल सूचना सहायक हूँ। आप अपना टोकन (${activeUhid}), प्रतीक्षा समय, विभाग या अस्पताल नियमों के बारे में कोई भी प्रश्न पूछ सकते हैं।`
         : language === 'te'
-        ? `నమస్కారం ${currentUser?.name || ''}! నేను సేహత్‌సేతు ఆసుపత్రి సహాయకుడిని. టోకెన్, నిరీక్షణ సమయం, గదుల వివరాలు లేదా ఆసుపత్రి మార్గదర్శకాలపై ఏవైనా సందేహాలు అడగవచ్చు.`
-        : `Hello ${currentUser?.name || ''}! I am the SehatSetu Patient Information Assistant. Ask me anything about your token, waiting times, departments, or hospital guidelines.`;
+        ? `నమస్కారం ${currentUser?.name || ''}! నేను సేహత్‌సేతు ఆసుపత్రి సహాయకుడిని. మీ టోకెన్ (${activeUhid}), నిరీక్షణ సమయం, గదుల వివరాలు లేదా ఆసుపత్రి నిబంధనలపై ఏవైనా సందేహాలు అడగవచ్చు.`
+        : `Hello ${currentUser?.name || ''}! I am the SehatSetu Hospital Information Assistant. Ask me about your token (${activeUhid}), waiting time, departments, or hospital guidelines.`;
 
     setMessages([
       {
@@ -44,10 +64,10 @@ export const PatientAIAssistantWidget: React.FC = () => {
         sender: 'assistant',
         text: greetingText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        sources: ['Civil Hospital Operational Guide'],
+        sources: ['Civil Hospital Operational Guide', 'Live Queue Sync'],
       },
     ]);
-  }, [language, currentUser]);
+  }, [language, currentUser, activeUhid]);
 
   useEffect(() => {
     if (isOpen) {
@@ -58,11 +78,15 @@ export const PatientAIAssistantWidget: React.FC = () => {
   const quickPrompts = [
     {
       label: language === 'hi' ? '⏱️ प्रतीक्षा समय कितना है?' : language === 'te' ? '⏱️ నిరీక్షణ సమయం ఎంత?' : '⏱️ What is my wait time?',
-      query: 'What is my current queue rank and estimated wait time?',
+      query: `What is my current queue rank and estimated wait time for token ${activeUhid}?`,
     },
     {
       label: language === 'hi' ? '🏥 इमरजेंसी कक्ष कहाँ है?' : language === 'te' ? '🏥 ఎమర్జెన్సీ గది ఎక్కడ ఉంది?' : '🏥 Where is Emergency Room?',
-      query: 'Where is the Emergency Room located in Ward A?',
+      query: 'Where is the Emergency Room located in Ward A and what are its timings?',
+    },
+    {
+      label: language === 'hi' ? '⚖️ ट्राइएज प्राथमिकता कैसे तय होती है?' : language === 'te' ? '⚖️ ట్రయాజ్ ప్రాధాన్యత ఎలా నిర్ణయిస్తారు?' : '⚖️ How does triage priority work?',
+      query: 'How does SehatSetu determine patient triage priority in the queue?',
     },
     {
       label: language === 'hi' ? '📋 कौन से दस्तावेज लाएं?' : language === 'te' ? '📋 ఏ పత్రాలు తీసుకురావాలి?' : '📋 What documents to bring?',
@@ -97,12 +121,13 @@ export const PatientAIAssistantWidget: React.FC = () => {
       const res: PatientAssistantResponse = await aiService.askPatientAssistant({
         question: textToSend,
         language: language,
-        patient_uhid: currentUser?.uhid || 'UHID-2026-0089',
+        patient_uhid: activeUhid,
         patient_context: {
-          queue_position: 2,
-          estimated_wait_minutes: 15,
-          department_name: 'General Medicine',
-          uhid: currentUser?.uhid || 'UHID-2026-0089',
+          queue_position: patientRank > 0 ? patientRank : 1,
+          estimated_wait_minutes: liveWaitMins,
+          department_name: liveEntry?.department_name || 'General Medicine',
+          status: liveEntry?.status || 'WAITING',
+          uhid: activeUhid,
         },
       });
 
