@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AppProvider } from './context/AppContext';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { OverviewPage } from './pages/OverviewPage';
 import { IntakePage } from './pages/IntakePage';
@@ -22,19 +23,21 @@ const queryClient = new QueryClient({
 export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<OverviewPage />} />
-            <Route path="intake" element={<IntakePage />} />
-            <Route path="queue" element={<QueuePage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="audit" element={<AuditPage />} />
-            <Route path="404" element={<NotFoundPage />} />
-            <Route path="*" element={<Navigate to="/404" replace />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <AppProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<DashboardLayout />}>
+              <Route index element={<OverviewPage />} />
+              <Route path="intake" element={<IntakePage />} />
+              <Route path="queue" element={<QueuePage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="audit" element={<AuditPage />} />
+              <Route path="404" element={<NotFoundPage />} />
+              <Route path="*" element={<Navigate to="/404" replace />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AppProvider>
     </QueryClientProvider>
   );
 };

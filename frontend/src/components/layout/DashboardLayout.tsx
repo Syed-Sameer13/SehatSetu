@@ -3,8 +3,10 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopNavbar } from './TopNavbar';
 import { HealthBanner } from '../common/HealthBanner';
+import { useRealtimeSubscription } from '../../hooks/useRealtimeQueue';
 
 export const DashboardLayout: React.FC = () => {
+  useRealtimeSubscription();
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
       {/* Sidebar */}

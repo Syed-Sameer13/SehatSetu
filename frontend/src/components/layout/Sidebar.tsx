@@ -8,23 +8,19 @@ import {
   History,
   ShieldAlert,
 } from 'lucide-react';
-
-interface NavItem {
-  label: string;
-  path: string;
-  icon: React.ElementType;
-  badge?: string;
-}
-
-const navItems: NavItem[] = [
-  { label: 'Overview', path: '/', icon: LayoutDashboard },
-  { label: 'Register Patient', path: '/intake', icon: UserPlus },
-  { label: 'Patient Queue', path: '/queue', icon: Users },
-  { label: 'Analytics', path: '/analytics', icon: BarChart3 },
-  { label: 'Audit History', path: '/audit', icon: History },
-];
+import { useApp } from '../../context/AppContext';
 
 export const Sidebar: React.FC = () => {
+  const { role, t } = useApp();
+
+  const navItems = [
+    { label: t('nav_overview'), path: '/', icon: LayoutDashboard },
+    { label: t('nav_intake'), path: '/intake', icon: UserPlus },
+    { label: t('nav_queue'), path: '/queue', icon: Users },
+    { label: t('nav_analytics'), path: '/analytics', icon: BarChart3 },
+    { label: t('nav_audit'), path: '/audit', icon: History },
+  ];
+
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-full flex-shrink-0">
       {/* Brand Header */}
@@ -33,8 +29,8 @@ export const Sidebar: React.FC = () => {
           SS
         </div>
         <div>
-          <h1 className="font-bold text-slate-900 leading-none text-base">SehatSetu</h1>
-          <span className="text-[11px] text-teal-700 font-medium">सेहत सेतु • Triage Hub</span>
+          <h1 className="font-bold text-slate-900 leading-none text-base">{t('hospital_name')}</h1>
+          <span className="text-[11px] text-teal-700 font-medium">{t('hospital_tagline')}</span>
         </div>
       </div>
 
@@ -59,11 +55,6 @@ export const Sidebar: React.FC = () => {
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
               <span className="flex-1">{item.label}</span>
-              {item.badge && (
-                <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">
-                  {item.badge}
-                </span>
-              )}
             </NavLink>
           );
         })}
@@ -83,12 +74,17 @@ export const Sidebar: React.FC = () => {
       {/* User / Station Footer */}
       <div className="p-4 border-t border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700">
-            DR
+          <div className="w-8 h-8 rounded-full bg-teal-100 border border-teal-300 text-teal-800 flex items-center justify-center text-xs font-bold">
+            {role.substring(0, 2)}
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-800 leading-tight">Duty Station</span>
-            <span className="text-[10px] text-slate-500">Emergency OPD</span>
+            <span className="text-xs font-bold text-slate-800 leading-tight">
+              {role === 'DOCTOR' && 'Dr. Duty Officer'}
+              {role === 'NURSE' && 'Sister Staff Nurse'}
+              {role === 'REGISTRATION' && 'Intake Desk Staff'}
+              {role === 'ADMIN' && 'Medical Superintendant'}
+            </span>
+            <span className="text-[10px] text-teal-700 font-semibold">{role} • Civil Hospital</span>
           </div>
         </div>
       </div>

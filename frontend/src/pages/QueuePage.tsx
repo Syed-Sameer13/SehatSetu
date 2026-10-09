@@ -23,9 +23,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
 
 export const QueuePage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { triggerCallAlert } = useApp();
   const [selectedDept, setSelectedDept] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('WAITING');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('ALL');
@@ -73,12 +75,18 @@ export const QueuePage: React.FC = () => {
 
   // Call Next Patient Mutation
   const callNextMutation = useMutation({
-    mutationFn: (deptId: string) => callNextPatient(deptId, 'OPD Room 1'),
+    mutationFn: (deptId: string) => callNextPatient(deptId, 'Consultation Room 1'),
     onSuccess: (res) => {
       setCallFeedback(res.message);
       queryClient.invalidateQueries({ queryKey: ['queue'] });
       if (res.data) {
         setSelectedPatient(res.data);
+        triggerCallAlert(
+          res.data.uhid,
+          res.data.full_name,
+          '',
+          res.data.department_name || 'Consultation Room 1'
+        );
       }
       setTimeout(() => setCallFeedback(null), 6000);
     },
