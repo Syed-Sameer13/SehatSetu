@@ -105,6 +105,10 @@ export interface QueueEntry {
 export interface AuditLog {
   id: string;
   visit_id?: string;
+  patient_name?: string;
+  uhid?: string;
+  department_name?: string;
+  summary?: string;
   action_type: string;
   previous_state?: Record<string, unknown>;
   new_state?: Record<string, unknown>;

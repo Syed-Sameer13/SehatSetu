@@ -89,10 +89,25 @@ class DataStore:
         previous_state: Optional[Dict[str, Any]] = None,
         new_state: Optional[Dict[str, Any]] = None,
         reason: Optional[str] = None,
+        patient_name: Optional[str] = None,
+        uhid: Optional[str] = None,
+        department_name: Optional[str] = None,
+        summary: Optional[str] = None,
     ):
         now = datetime.now(timezone.utc)
         log_id = str(uuid.uuid4())
         client = get_supabase_client()
+
+        # Merge patient metadata into new_state if not already present
+        audit_state = dict(new_state or {})
+        if patient_name and "patient_name" not in audit_state:
+            audit_state["patient_name"] = patient_name
+        if uhid and "uhid" not in audit_state:
+            audit_state["uhid"] = uhid
+        if department_name and "department_name" not in audit_state:
+            audit_state["department_name"] = department_name
+        if summary and "summary" not in audit_state:
+            audit_state["summary"] = summary
 
         if client:
             try:
@@ -101,7 +116,7 @@ class DataStore:
                     "visit_id": visit_id,
                     "action_type": action_type,
                     "previous_state": previous_state,
-                    "new_state": new_state,
+                    "new_state": audit_state,
                     "reason": reason,
                     "ip_address": "127.0.0.1",
                     "created_at": now.isoformat(),
@@ -114,9 +129,13 @@ class DataStore:
         entry = AuditLogResponse(
             id=log_id,
             visit_id=visit_id,
+            patient_name=patient_name or audit_state.get("patient_name"),
+            uhid=uhid or audit_state.get("uhid"),
+            department_name=department_name or audit_state.get("department_name"),
             action_type=action_type,
+            summary=summary or audit_state.get("summary"),
             previous_state=previous_state,
-            new_state=new_state,
+            new_state=audit_state,
             reason=reason,
             ip_address="127.0.0.1",
             created_at=now,
@@ -684,19 +703,58 @@ class DataStore:
             try:
                 res = client.table("audit_logs").select("*").order("created_at", desc=True).limit(limit).execute()
                 if res.data:
-                    return [
-                        AuditLogResponse(
-                            id=row["id"],
-                            visit_id=row.get("visit_id"),
-                            action_type=row["action_type"],
-                            previous_state=row.get("previous_state"),
-                            new_state=row.get("new_state"),
-                            reason=row.get("reason"),
-                            ip_address=row.get("ip_address"),
-                            created_at=parse_iso_datetime(row["created_at"]),
+                    logs: List[AuditLogResponse] = []
+                    for row in res.data:
+                        n_state = row.get("new_state") or {}
+                        p_name = n_state.get("patient_name")
+                        p_uhid = n_state.get("uhid")
+                        d_name = n_state.get("department_name")
+                        summary = n_state.get("summary")
+
+                        # Fallback lookup if not cached in new_state
+                        if not p_name and row.get("visit_id"):
+                            try:
+                                v_res = client.table("visits").select("patient_id, department_id, departments(name), patients(full_name, uhid)").eq("id", row["visit_id"]).execute()
+                                if v_res.data:
+                                    v_row = v_res.data[0]
+                                    p_data = v_row.get("patients") or {}
+                                    d_data = v_row.get("departments") or {}
+                                    p_name = p_data.get("full_name")
+                                    p_uhid = p_data.get("uhid")
+                                    d_name = d_data.get("name")
+                            except Exception:
+                                pass
+
+                        if not summary:
+                            act = row.get("action_type", "")
+                            if act == "PATIENT_INTAKE":
+                                summary = f"Patient {p_name or 'Unknown'} registered with intake triage assessment."
+                            elif act == "CALL_NEXT":
+                                summary = f"Patient {p_name or 'Unknown'} called to consultation desk."
+                            elif act == "PRIORITY_OVERRIDE":
+                                summary = f"Priority category overridden to {n_state.get('urgency_category')} by clinician."
+                            elif act == "STATUS_UPDATE":
+                                summary = f"Patient visit status updated to {n_state.get('status')}."
+                            else:
+                                summary = f"Clinical action {act} executed."
+
+                        logs.append(
+                            AuditLogResponse(
+                                id=row["id"],
+                                visit_id=row.get("visit_id"),
+                                patient_name=p_name,
+                                uhid=p_uhid,
+                                department_name=d_name,
+                                action_type=row["action_type"],
+                                summary=summary,
+                                previous_state=row.get("previous_state"),
+                                new_state=n_state,
+                                reason=row.get("reason"),
+                                ip_address=row.get("ip_address"),
+                                created_at=parse_iso_datetime(row["created_at"]),
+                            )
                         )
-                        for row in res.data
-                    ]
+                    return logs
             except Exception as e:
                 print(f"[Supabase get_audit_logs Error] {e}")
 

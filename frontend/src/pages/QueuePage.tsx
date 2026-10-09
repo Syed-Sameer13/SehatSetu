@@ -27,7 +27,7 @@ import { useApp } from '../context/AppContext';
 
 export const QueuePage: React.FC = () => {
   const queryClient = useQueryClient();
-  const { triggerCallAlert, t } = useApp();
+  const { triggerCallAlert, t, role } = useApp();
   const [selectedDept, setSelectedDept] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('WAITING');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('ALL');
@@ -39,6 +39,11 @@ export const QueuePage: React.FC = () => {
   const [callFeedback, setCallFeedback] = useState<string | null>(null);
   const [aiSummary, setAiSummary] = useState<AISummarizeResponse | null>(null);
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+
+  // Role permissions
+  const isDoctorOrAdmin = role === 'DOCTOR' || role === 'ADMIN';
+  const canCallPatient = role === 'DOCTOR' || role === 'NURSE' || role === 'ADMIN';
+  const canConsult = role === 'DOCTOR' || role === 'ADMIN';
 
   const handleOpenPatientReview = (entry: QueueEntry) => {
     setSelectedPatient(entry);
@@ -149,30 +154,37 @@ export const QueuePage: React.FC = () => {
       {/* Header & Quick Call Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Users className="w-5 h-5 text-teal-700" />
-            {t('queue_title')}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Users className="w-5 h-5 text-teal-700" />
+              {t('queue_title')}
+            </h2>
+            <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+              {role}
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
             {t('queue_subtitle')}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={callNextMutation.isPending}
-            onClick={() => {
-              const deptToCall = selectedDept || departments?.[0]?.id;
-              if (deptToCall) {
-                callNextMutation.mutate(deptToCall);
-              }
-            }}
-            className="px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 disabled:bg-teal-400 rounded-md transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
-          >
-            <Bell className="w-4 h-4" />
-            {callNextMutation.isPending ? t('btn_calling_patient') : t('btn_call_next')}
-          </button>
+          {canCallPatient && (
+            <button
+              type="button"
+              disabled={callNextMutation.isPending}
+              onClick={() => {
+                const deptToCall = selectedDept || departments?.[0]?.id;
+                if (deptToCall) {
+                  callNextMutation.mutate(deptToCall);
+                }
+              }}
+              className="px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 disabled:bg-teal-400 rounded-md transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+            >
+              <Bell className="w-4 h-4" />
+              {callNextMutation.isPending ? t('btn_calling_patient') : t('btn_call_next')}
+            </button>
+          )}
           <Link
             to="/intake"
             className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-md transition-colors shadow-sm"
@@ -509,16 +521,22 @@ export const QueuePage: React.FC = () => {
 
             {/* Clinical Actions & Status Transitions */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsOverrideModalOpen(true)}
-                className="px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors"
-              >
-                {t('btn_override_urgency')}
-              </button>
+              {isDoctorOrAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setIsOverrideModalOpen(true)}
+                  className="px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors cursor-pointer"
+                >
+                  {t('btn_override_urgency')}
+                </button>
+              ) : (
+                <span className="text-[11px] text-slate-400 italic">
+                  {t('role_restricted_override')}
+                </span>
+              )}
 
               <div className="flex items-center gap-2">
-                {selectedPatient.status === 'WAITING' && (
+                {canCallPatient && selectedPatient.status === 'WAITING' && (
                   <button
                     type="button"
                     onClick={() =>
@@ -527,13 +545,13 @@ export const QueuePage: React.FC = () => {
                         status: 'CALLED',
                       })
                     }
-                    className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors shadow-xs"
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors shadow-xs cursor-pointer"
                   >
                     {t('btn_mark_called')}
                   </button>
                 )}
 
-                {selectedPatient.status === 'CALLED' && (
+                {canConsult && selectedPatient.status === 'CALLED' && (
                   <button
                     type="button"
                     onClick={() =>
@@ -542,39 +560,42 @@ export const QueuePage: React.FC = () => {
                         status: 'IN_CONSULTATION',
                       })
                     }
-                    className="px-3 py-1.5 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded transition-colors shadow-xs"
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded transition-colors shadow-xs cursor-pointer"
                   >
                     {t('btn_start_consultation')}
                   </button>
                 )}
 
-                {(selectedPatient.status === 'IN_CONSULTATION' || selectedPatient.status === 'CALLED') && (
+                {canConsult &&
+                  (selectedPatient.status === 'IN_CONSULTATION' || selectedPatient.status === 'CALLED') && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        statusMutation.mutate({
+                          visitId: selectedPatient.visit_id,
+                          status: 'COMPLETED',
+                        })
+                      }
+                      className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors shadow-xs cursor-pointer"
+                    >
+                      {t('btn_mark_completed')}
+                    </button>
+                  )}
+
+                {isDoctorOrAdmin && (
                   <button
                     type="button"
                     onClick={() =>
                       statusMutation.mutate({
                         visitId: selectedPatient.visit_id,
-                        status: 'COMPLETED',
+                        status: 'CANCELLED',
                       })
                     }
-                    className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors shadow-xs"
+                    className="px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
                   >
-                    {t('btn_mark_completed')}
+                    {t('btn_cancel_visit')}
                   </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    statusMutation.mutate({
-                      visitId: selectedPatient.visit_id,
-                      status: 'CANCELLED',
-                    })
-                  }
-                  className="px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded transition-colors"
-                >
-                  {t('btn_cancel_visit')}
-                </button>
               </div>
             </div>
           </div>

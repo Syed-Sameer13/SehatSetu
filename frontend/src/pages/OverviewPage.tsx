@@ -16,7 +16,7 @@ import { analyticsService } from '../services/analyticsService';
 import { useApp } from '../context/AppContext';
 
 export const OverviewPage: React.FC = () => {
-  const { t } = useApp();
+  const { t, role } = useApp();
   const { data: analytics, isLoading } = useQuery({
     queryKey: ['analytics-overview'],
     queryFn: () => analyticsService.getOverview(),
@@ -29,17 +29,36 @@ export const OverviewPage: React.FC = () => {
   const completedToday = analytics?.completed_today ?? 0;
   const totalRegistered = analytics?.total_registered_today ?? 0;
 
+  const getRoleDescription = () => {
+    switch (role) {
+      case 'DOCTOR':
+        return t('role_desc_doctor');
+      case 'NURSE':
+        return t('role_desc_nurse');
+      case 'REGISTRATION':
+        return t('role_desc_registration');
+      case 'ADMIN':
+      default:
+        return t('role_desc_admin');
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Page Header */}
+      {/* Page Header & Active Role Mode */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            {t('overview_title')}
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              {t('overview_title')}
+            </h2>
             <span className="text-xs font-semibold px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">
               {t('overview_live_badge')}
             </span>
-          </h2>
+            <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+              {role}
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
             {t('overview_subtitle')}
           </p>
@@ -59,6 +78,20 @@ export const OverviewPage: React.FC = () => {
             <Users className="w-3.5 h-3.5" />
             {t('btn_view_queue')}
           </Link>
+        </div>
+      </div>
+
+      {/* Active Role Capability Banner */}
+      <div className="bg-teal-50/70 border border-teal-200/80 rounded-lg p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-teal-900">{t('active_role_badge')}</span>
+          <span className="font-semibold text-teal-800 bg-teal-100 px-2 py-0.5 rounded text-[11px]">
+            {t(`role_${role.toLowerCase()}`)}
+          </span>
+          <span className="text-teal-700 text-xs hidden md:inline">— {getRoleDescription()}</span>
+        </div>
+        <div className="text-[11px] font-medium text-teal-700">
+          {t('hospital_ward')}
         </div>
       </div>
 

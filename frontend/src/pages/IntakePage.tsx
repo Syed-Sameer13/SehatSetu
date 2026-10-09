@@ -46,6 +46,13 @@ interface IntakeFormData {
   };
 }
 
+// Helper for optional numeric input fields
+const optionalNumber = (minVal: number, maxVal: number) =>
+  z.preprocess(
+    (val) => (val === '' || val === undefined || val === null || (typeof val === 'number' && isNaN(val)) ? undefined : Number(val)),
+    z.number().min(minVal).max(maxVal).optional()
+  );
+
 // Intake Zod Schema
 const intakeFormSchema = z.object({
   full_name: z.string().min(2, 'Full legal name is required'),
@@ -56,21 +63,23 @@ const intakeFormSchema = z.object({
   address: z.string().optional(),
   department_id: z.string().min(1, 'Please select a clinical department'),
   chief_complaint: z.string().min(3, 'Chief complaint description is required (min 3 characters)'),
-  vital_observations: z.object({
-    systolic_bp: z.coerce.number().min(40).max(300).optional(),
-    diastolic_bp: z.coerce.number().min(20).max(200).optional(),
-    heart_rate: z.coerce.number().min(20).max(300).optional(),
-    respiratory_rate: z.coerce.number().min(4).max(80).optional(),
-    spo2: z.coerce.number().min(40).max(100).optional(),
-    temperature_f: z.coerce.number().min(85).max(115).optional(),
-    blood_glucose_mg_dl: z.coerce.number().min(10).max(1200).optional(),
-    gcs: z.coerce.number().min(3).max(15).optional(),
-  }).default({}),
+  vital_observations: z
+    .object({
+      systolic_bp: optionalNumber(40, 300),
+      diastolic_bp: optionalNumber(20, 200),
+      heart_rate: optionalNumber(20, 300),
+      respiratory_rate: optionalNumber(4, 80),
+      spo2: optionalNumber(40, 100),
+      temperature_f: optionalNumber(85, 115),
+      blood_glucose_mg_dl: optionalNumber(10, 1200),
+      gcs: optionalNumber(3, 15),
+    })
+    .default({}),
 });
 
 export const IntakePage: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useApp();
+  const { t, role } = useApp();
   const [successData, setSuccessData] = useState<PatientIntakeData | null>(null);
 
   // Fetch departments
@@ -234,10 +243,15 @@ export const IntakePage: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-teal-700" />
-            {t('intake_title')}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-teal-700" />
+              {t('intake_title')}
+            </h2>
+            <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+              {role}
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
             {t('intake_subtitle')}
           </p>
@@ -550,9 +564,12 @@ export const IntakePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <Wind className="w-3.5 h-3.5 text-teal-600" />
-                {t('lbl_rr')}
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Wind className="w-3.5 h-3.5 text-teal-600" />
+                  {t('lbl_rr')}
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">{t('lbl_optional')}</span>
               </label>
               <input
                 type="number"
@@ -577,9 +594,12 @@ export const IntakePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <Droplets className="w-3.5 h-3.5 text-purple-500" />
-                {t('lbl_glucose')}
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Droplets className="w-3.5 h-3.5 text-purple-500" />
+                  {t('lbl_glucose')}
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">{t('lbl_optional')}</span>
               </label>
               <input
                 type="number"
@@ -590,9 +610,12 @@ export const IntakePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                <Brain className="w-3.5 h-3.5 text-indigo-500" />
-                {t('lbl_gcs')}
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Brain className="w-3.5 h-3.5 text-indigo-500" />
+                  {t('lbl_gcs')}
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">{t('lbl_optional')}</span>
               </label>
               <input
                 type="number"

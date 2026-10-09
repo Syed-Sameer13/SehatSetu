@@ -120,7 +120,7 @@ def evaluate_triage(
         missing_flags.append("systolic_bp")
 
     # --------------------------------------------------------------------------
-    # 5. Respiratory Rate
+    # 5. Respiratory Rate (Optional)
     # --------------------------------------------------------------------------
     if vitals.respiratory_rate is not None:
         rr = vitals.respiratory_rate
@@ -132,8 +132,6 @@ def evaluate_triage(
             score += 25
             is_high_flagged = True
             evidence.append(f"Abnormal Respiratory Rate: {rr} breaths/min")
-    else:
-        missing_flags.append("respiratory_rate")
 
     # --------------------------------------------------------------------------
     # 6. Body Temperature
