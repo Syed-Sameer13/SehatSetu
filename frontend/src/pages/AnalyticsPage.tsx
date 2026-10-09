@@ -28,6 +28,7 @@ import {
 import { analyticsService } from '../services/analyticsService';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
+import { useApp } from '../context/AppContext';
 
 const URGENCY_COLORS: Record<string, string> = {
   CRITICAL: '#ef4444', // red-500
@@ -38,6 +39,7 @@ const URGENCY_COLORS: Record<string, string> = {
 };
 
 export const AnalyticsPage: React.FC = () => {
+  const { t } = useApp();
   const {
     data: analytics,
     isLoading,
@@ -101,13 +103,13 @@ export const AnalyticsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            Hospital Operational Analytics
+            {t('analytics_title')}
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
-              Live Real-Time
+              {t('analytics_live_badge')}
             </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Real-time patient triage volume, waiting time thresholds, department loads, and intake velocity.
+            {t('analytics_subtitle')}
           </p>
         </div>
 
@@ -117,7 +119,7 @@ export const AnalyticsPage: React.FC = () => {
           className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-60"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isFetching ? 'animate-spin' : ''}`} />
-          {isFetching ? 'Refreshing...' : 'Refresh Data'}
+          {isFetching ? 'Refreshing...' : t('btn_refresh')}
         </button>
       </div>
 
@@ -125,29 +127,29 @@ export const AnalyticsPage: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold">Total Registered</span>
+            <span className="text-xs font-semibold">{t('kpi_total_registered')}</span>
             <Users className="w-4 h-4 text-slate-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900">{analytics.total_registered_today}</span>
-            <span className="text-xs text-slate-500 font-medium">today</span>
+            <span className="text-xs text-slate-500 font-medium">{t('today')}</span>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold">Waiting in Queue</span>
+            <span className="text-xs font-semibold">{t('kpi_active_waiting')}</span>
             <Clock className="w-4 h-4 text-amber-500" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-amber-600">{analytics.currently_waiting}</span>
-            <span className="text-xs text-slate-500 font-medium">patients</span>
+            <span className="text-xs text-slate-500 font-medium">pts</span>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold">In Consultation</span>
+            <span className="text-xs font-semibold">{t('tbl_consulting')}</span>
             <Activity className="w-4 h-4 text-teal-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
@@ -158,7 +160,7 @@ export const AnalyticsPage: React.FC = () => {
 
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold">Completed Visits</span>
+            <span className="text-xs font-semibold">{t('kpi_completed_today')}</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
@@ -169,7 +171,7 @@ export const AnalyticsPage: React.FC = () => {
 
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold">Avg Wait Time</span>
+            <span className="text-xs font-semibold">{t('kpi_avg_wait')}</span>
             <TrendingUp className="w-4 h-4 text-blue-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
@@ -185,8 +187,8 @@ export const AnalyticsPage: React.FC = () => {
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Triage Distribution</h3>
-              <p className="text-[11px] text-slate-400">Proportion of patients by urgency level</p>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">{t('chart_triage_dist')}</h3>
+              <p className="text-[11px] text-slate-400">{t('chart_triage_dist_sub')}</p>
             </div>
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
@@ -229,8 +231,8 @@ export const AnalyticsPage: React.FC = () => {
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm lg:col-span-2 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Hourly Patient Inflow</h3>
-              <p className="text-[11px] text-slate-400">Registration velocity across clinical shifts</p>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">{t('chart_inflow')}</h3>
+              <p className="text-[11px] text-slate-400">{t('chart_inflow_sub')}</p>
             </div>
             <TrendingUp className="w-4 h-4 text-teal-600" />
           </div>
@@ -269,8 +271,8 @@ export const AnalyticsPage: React.FC = () => {
       <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Department Queue & Wait Times</h3>
-            <p className="text-[11px] text-slate-400">Active queue count and average wait duration by specialty</p>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">{t('chart_dept_load')}</h3>
+            <p className="text-[11px] text-slate-400">{t('chart_dept_load_sub')}</p>
           </div>
           <Building2 className="w-4 h-4 text-slate-400" />
         </div>
@@ -283,9 +285,9 @@ export const AnalyticsPage: React.FC = () => {
               <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
               <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '6px' }} />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-              <Bar dataKey="waiting" name="Waiting" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="consulting" name="In Consultation" fill="#0d9488" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="completed" name="Completed Today" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="waiting" name={t('tbl_waiting')} fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="consulting" name={t('tbl_consulting')} fill="#0d9488" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="completed" name={t('tbl_completed')} fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -295,11 +297,11 @@ export const AnalyticsPage: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
-                <th className="py-2.5 px-4">Department</th>
-                <th className="py-2.5 px-4 text-center">Waiting</th>
-                <th className="py-2.5 px-4 text-center">In Consultation</th>
-                <th className="py-2.5 px-4 text-center">Completed Today</th>
-                <th className="py-2.5 px-4 text-right">Avg Wait Time</th>
+                <th className="py-2.5 px-4">{t('tbl_dept')}</th>
+                <th className="py-2.5 px-4 text-center">{t('tbl_waiting')}</th>
+                <th className="py-2.5 px-4 text-center">{t('tbl_consulting')}</th>
+                <th className="py-2.5 px-4 text-center">{t('tbl_completed')}</th>
+                <th className="py-2.5 px-4 text-right">{t('tbl_avg_wait')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">

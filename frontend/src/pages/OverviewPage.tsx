@@ -13,8 +13,10 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { analyticsService } from '../services/analyticsService';
+import { useApp } from '../context/AppContext';
 
 export const OverviewPage: React.FC = () => {
+  const { t } = useApp();
   const { data: analytics, isLoading } = useQuery({
     queryKey: ['analytics-overview'],
     queryFn: () => analyticsService.getOverview(),
@@ -33,13 +35,13 @@ export const OverviewPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            Hospital Clinical Overview
+            {t('overview_title')}
             <span className="text-xs font-semibold px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">
-              Live Operations
+              {t('overview_live_badge')}
             </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Real-time patient intake monitoring, deterministic triage prioritisation, and active queue management.
+            {t('overview_subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2.5">
@@ -48,14 +50,14 @@ export const OverviewPage: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors shadow-sm"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            New Patient Intake
+            {t('btn_new_intake')}
           </Link>
           <Link
             to="/queue"
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
           >
             <Users className="w-3.5 h-3.5" />
-            View Active Queue
+            {t('btn_view_queue')}
           </Link>
         </div>
       </div>
@@ -64,57 +66,57 @@ export const OverviewPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Active Waiting</span>
+            <span className="text-xs font-medium uppercase tracking-wider">{t('kpi_active_waiting')}</span>
             <Users className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl font-bold text-amber-600">
             {isLoading ? '...' : waitingCount}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Awaiting triage call</div>
+          <div className="text-[11px] text-slate-400 mt-1">{t('kpi_active_waiting_sub')}</div>
         </div>
 
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Critical Flagged</span>
+            <span className="text-xs font-medium uppercase tracking-wider">{t('kpi_critical')}</span>
             <Activity className="w-4 h-4 text-red-500" />
           </div>
           <div className="text-2xl font-bold text-red-600">
             {isLoading ? '...' : criticalCount}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Immediate evaluation indicated</div>
+          <div className="text-[11px] text-slate-400 mt-1">{t('kpi_critical_sub')}</div>
         </div>
 
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Avg Wait Time</span>
+            <span className="text-xs font-medium uppercase tracking-wider">{t('kpi_avg_wait')}</span>
             <Clock className="w-4 h-4 text-blue-500" />
           </div>
           <div className="text-2xl font-bold text-slate-900">
             {isLoading ? '...' : `${avgWait}m`}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Calculated from verified arrivals</div>
+          <div className="text-[11px] text-slate-400 mt-1">{t('kpi_avg_wait_sub')}</div>
         </div>
 
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Completed Today</span>
+            <span className="text-xs font-medium uppercase tracking-wider">{t('kpi_completed_today')}</span>
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl font-bold text-emerald-600">
             {isLoading ? '...' : completedToday}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Consultations finished</div>
+          <div className="text-[11px] text-slate-400 mt-1">{t('kpi_completed_today_sub')}</div>
         </div>
 
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-medium uppercase tracking-wider">Total Registered</span>
+            <span className="text-xs font-medium uppercase tracking-wider">{t('kpi_total_registered')}</span>
             <TrendingUp className="w-4 h-4 text-teal-600" />
           </div>
           <div className="text-2xl font-bold text-slate-900">
             {isLoading ? '...' : totalRegistered}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Cumulative patient intakes</div>
+          <div className="text-[11px] text-slate-400 mt-1">{t('kpi_total_registered_sub')}</div>
         </div>
       </div>
 
@@ -123,10 +125,10 @@ export const OverviewPage: React.FC = () => {
         <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <Building2 className="w-4 h-4 text-teal-600" />
-            Specialty Departments Status
+            {t('overview_dept_title')}
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Live patient loads currently distributed across emergency and outpatient clinical wings.
+            {t('overview_dept_desc')}
           </p>
 
           <div className="space-y-2 pt-1">
@@ -139,10 +141,10 @@ export const OverviewPage: React.FC = () => {
                   <span className="font-semibold text-slate-800">{d.department_name}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-amber-700 bg-amber-100/70 px-2 py-0.5 rounded text-[11px] font-medium">
-                      {d.waiting_count} waiting
+                      {d.waiting_count} {t('tbl_waiting')}
                     </span>
                     <span className="text-teal-700 bg-teal-100/70 px-2 py-0.5 rounded text-[11px] font-medium">
-                      {d.in_consultation_count} consulting
+                      {d.in_consultation_count} {t('tbl_consulting')}
                     </span>
                   </div>
                 </div>
@@ -154,7 +156,7 @@ export const OverviewPage: React.FC = () => {
         </div>
 
         <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold text-slate-900">Clinical Workflow Navigation</h3>
+          <h3 className="text-sm font-bold text-slate-900">{t('overview_workflow_title')}</h3>
           <div className="space-y-2.5">
             <Link
               to="/intake"
@@ -163,9 +165,9 @@ export const OverviewPage: React.FC = () => {
               <div>
                 <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                   <UserPlus className="w-3.5 h-3.5 text-teal-600" />
-                  1. Patient Intake & Triage Assessment
+                  {t('wf_intake_title')}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">Enter demographics, vitals, and chief complaints for rule evaluation</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">{t('wf_intake_sub')}</div>
               </div>
               <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all" />
             </Link>
@@ -177,9 +179,9 @@ export const OverviewPage: React.FC = () => {
               <div>
                 <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-blue-600" />
-                  2. Dynamic Prioritised Queue
+                  {t('wf_queue_title')}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">Call next patient, review vital signs, or perform doctor overrides</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">{t('wf_queue_sub')}</div>
               </div>
               <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all" />
             </Link>
@@ -191,9 +193,9 @@ export const OverviewPage: React.FC = () => {
               <div>
                 <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                  3. Operational Analytics & Inflow Trends
+                  {t('wf_analytics_title')}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">Visualise triage urgency distribution, hourly velocity, and wait metrics</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">{t('wf_analytics_sub')}</div>
               </div>
               <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all" />
             </Link>
@@ -205,9 +207,9 @@ export const OverviewPage: React.FC = () => {
               <div>
                 <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                   <History className="w-3.5 h-3.5 text-indigo-600" />
-                  4. Immutable Audit & Compliance Log
+                  {t('wf_audit_title')}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">Review chronological clinician decisions, priority overrides, and timestamps</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">{t('wf_audit_sub')}</div>
               </div>
               <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all" />
             </Link>

@@ -4,8 +4,10 @@ import { fetchAuditLogs } from '../services/auditService';
 import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { History, RefreshCw } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 export const AuditPage: React.FC = () => {
+  const { t } = useApp();
   const { data: logs, isLoading, refetch } = useQuery({
     queryKey: ['audit-logs'],
     queryFn: () => fetchAuditLogs(50),
@@ -17,26 +19,26 @@ export const AuditPage: React.FC = () => {
       case 'PRIORITY_OVERRIDE':
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-            Priority Override
+            {t('btn_override_urgency')}
           </span>
         );
       case 'CALL_NEXT':
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-            Patient Called
+            {t('tab_called')}
           </span>
         );
       case 'STATUS_UPDATE':
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-teal-100 text-teal-800 border border-teal-200">
-            Status Transition
+            {t('col_action')}
           </span>
         );
       case 'PATIENT_INTAKE':
       default:
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
-            Registration Intake
+            {t('nav_intake')}
           </span>
         );
     }
@@ -49,10 +51,13 @@ export const AuditPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <History className="w-5 h-5 text-teal-700" />
-            Clinical & Queue Audit History
+            {t('audit_title')}
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+              {t('audit_live_badge')}
+            </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Immutable log of all clinical actions, status changes, and priority overrides.
+            {t('audit_subtitle')}
           </p>
         </div>
 
@@ -61,7 +66,7 @@ export const AuditPage: React.FC = () => {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-md transition-colors shadow-xs cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Refresh Log
+          {t('btn_refresh')}
         </button>
       </div>
 
@@ -80,11 +85,11 @@ export const AuditPage: React.FC = () => {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-4">Timestamp</th>
-                  <th className="py-3 px-4">Action Type</th>
-                  <th className="py-3 px-4">Visit ID</th>
-                  <th className="py-3 px-4">Action Summary / Reason</th>
-                  <th className="py-3 px-4 text-right">Audit Origin</th>
+                  <th className="py-3 px-4">{t('col_timestamp')}</th>
+                  <th className="py-3 px-4">{t('col_action')}</th>
+                  <th className="py-3 px-4">{t('col_visit_id')}</th>
+                  <th className="py-3 px-4">{t('col_new_state')}</th>
+                  <th className="py-3 px-4 text-right">{t('col_reason')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

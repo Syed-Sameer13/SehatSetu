@@ -8,6 +8,7 @@ import { submitPatientIntake } from '../services/patientService';
 import { PatientIntakePayload, PatientIntakeData, AISummarizeResponse } from '../types';
 import { aiService } from '../services/aiService';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { useApp } from '../context/AppContext';
 import {
   UserPlus,
   Activity,
@@ -18,7 +19,6 @@ import {
   Brain,
   Sparkles,
   CheckCircle2,
-  AlertCircle,
   ArrowRight,
   RotateCcw,
 } from 'lucide-react';
@@ -46,34 +46,35 @@ interface IntakeFormData {
   };
 }
 
-// Zod Validation Schema
-const intakeSchema = z.object({
-  full_name: z.string().min(2, 'Full legal name must be at least 2 characters').max(150),
-  age: z.number().min(0, 'Age cannot be negative').max(130, 'Please enter a valid age'),
+// Intake Zod Schema
+const intakeFormSchema = z.object({
+  full_name: z.string().min(2, 'Full legal name is required'),
+  age: z.coerce.number().min(0, 'Age must be 0 or greater').max(130, 'Age exceeds standard human range'),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   phone_number: z.string().optional(),
   emergency_contact_phone: z.string().optional(),
   address: z.string().optional(),
-  department_id: z.string().min(1, 'Please select an assigned department'),
-  chief_complaint: z.string().min(3, 'Chief complaint must be at least 3 characters'),
+  department_id: z.string().min(1, 'Please select a clinical department'),
+  chief_complaint: z.string().min(3, 'Chief complaint description is required (min 3 characters)'),
   vital_observations: z.object({
-    systolic_bp: z.number().min(40).max(300).optional(),
-    diastolic_bp: z.number().min(20).max(200).optional(),
-    heart_rate: z.number().min(20).max(300).optional(),
-    respiratory_rate: z.number().min(4).max(80).optional(),
-    spo2: z.number().min(0).max(100).optional(),
-    temperature_f: z.number().min(80).max(115).optional(),
-    blood_glucose_mg_dl: z.number().min(20).max(1000).optional(),
-    gcs: z.number().min(3).max(15).optional(),
-  }),
+    systolic_bp: z.coerce.number().min(40).max(300).optional(),
+    diastolic_bp: z.coerce.number().min(20).max(200).optional(),
+    heart_rate: z.coerce.number().min(20).max(300).optional(),
+    respiratory_rate: z.coerce.number().min(4).max(80).optional(),
+    spo2: z.coerce.number().min(40).max(100).optional(),
+    temperature_f: z.coerce.number().min(85).max(115).optional(),
+    blood_glucose_mg_dl: z.coerce.number().min(10).max(1200).optional(),
+    gcs: z.coerce.number().min(3).max(15).optional(),
+  }).default({}),
 });
 
 export const IntakePage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useApp();
   const [successData, setSuccessData] = useState<PatientIntakeData | null>(null);
 
   // Fetch departments
-  const { data: departments, isLoading: deptsLoading } = useQuery({
+  const { data: departments } = useQuery({
     queryKey: ['departments'],
     queryFn: fetchDepartments,
   });
@@ -84,9 +85,9 @@ export const IntakePage: React.FC = () => {
     setValue,
     watch,
     reset,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<IntakeFormData>({
-    resolver: zodResolver(intakeSchema),
+    resolver: zodResolver(intakeFormSchema) as any,
     defaultValues: {
       full_name: '',
       age: 0,
@@ -197,81 +198,90 @@ export const IntakePage: React.FC = () => {
     }
   };
 
-  // Live preliminary triage hint calculation
-  const calculateLivePreview = () => {
+  // Client-side quick preview of urgency score
+  const getPreviewUrgency = () => {
     const spo2 = watchedVitals?.spo2;
     const hr = watchedVitals?.heart_rate;
-    const complaint = watchedComplaint?.toLowerCase() || '';
+    const gcs = watchedVitals?.gcs;
+    const complaint = (watchedComplaint || '').toLowerCase();
 
-    if ((spo2 && spo2 < 92) || complaint.includes('chest pain') || complaint.includes('unresponsive')) {
-      return { category: 'CRITICAL' as const, badge: 'CRITICAL', hint: 'Severe Hypoxia or High-Risk Trigger Detected' };
+    if (
+      (spo2 && spo2 < 90) ||
+      (gcs && gcs <= 8) ||
+      complaint.includes('cardiac arrest') ||
+      complaint.includes('unresponsive')
+    ) {
+      return { category: 'CRITICAL', score: 95 };
     }
-    if ((hr && hr > 110) || (watchedVitals?.temperature_f && watchedVitals.temperature_f > 101.5)) {
-      return { category: 'HIGH' as const, badge: 'HIGH', hint: 'Marked Tachycardia or High Fever Flagged' };
+    if (
+      (spo2 && spo2 < 94) ||
+      (hr && (hr > 120 || hr < 50)) ||
+      complaint.includes('chest pain') ||
+      complaint.includes('stroke')
+    ) {
+      return { category: 'HIGH', score: 75 };
     }
-    if (watchedVitals?.spo2 || watchedVitals?.heart_rate) {
-      return { category: 'LOW' as const, badge: 'LOW', hint: 'Stable Vital Parameters' };
+    if (hr && hr > 100) {
+      return { category: 'MODERATE', score: 45 };
     }
-    return { category: 'NEEDS_REVIEW' as const, badge: 'NEEDS_REVIEW', hint: 'Vitals awaiting entry' };
+    return { category: 'LOW', score: 20 };
   };
 
-  const preview = calculateLivePreview();
+  const preview = getPreviewUrgency();
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-teal-700" />
-            Patient Registration & Triage Intake
+            {t('intake_title')}
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Capture patient identification, chief complaint, and objective vital sign observations.
+            {t('intake_subtitle')}
           </p>
         </div>
 
-        {/* Synthetic Demo Presets */}
-        <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
-          <span className="text-[11px] font-semibold text-slate-600 px-2 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-teal-700" /> Demo Quick Fill:
-          </span>
+        {/* Demo Preset Buttons */}
+        <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
+          <span className="text-[11px] font-semibold text-slate-500 px-1">{t('synthetic_presets')}</span>
           <button
             type="button"
             onClick={() => applyPreset('critical')}
             className="px-2 py-1 text-[11px] font-medium bg-white text-red-700 hover:bg-red-50 rounded border border-red-200 transition-colors cursor-pointer"
           >
-            Critical (Cardiac)
+            {t('preset_critical')}
           </button>
           <button
             type="button"
             onClick={() => applyPreset('high')}
             className="px-2 py-1 text-[11px] font-medium bg-white text-orange-700 hover:bg-orange-50 rounded border border-orange-200 transition-colors cursor-pointer"
           >
-            High (Fever)
+            {t('preset_high')}
           </button>
           <button
             type="button"
             onClick={() => applyPreset('low')}
             className="px-2 py-1 text-[11px] font-medium bg-white text-emerald-700 hover:bg-emerald-50 rounded border border-emerald-200 transition-colors cursor-pointer"
           >
-            Low (Back Pain)
+            {t('preset_low')}
           </button>
         </div>
       </div>
 
       {/* Success Modal / Banner */}
       {successData && (
-        <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-6 shadow-sm space-y-4">
+        <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-6 shadow-sm space-y-4 animate-in fade-in duration-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-emerald-900">Patient Enqueued Successfully</h3>
+                <h3 className="text-base font-bold text-emerald-900">{t('success_modal_title')}</h3>
                 <p className="text-xs text-emerald-700">
-                  UHID: <strong>{successData.patient.uhid}</strong> • Assigned Queue Position: <strong>#{successData.queue_position}</strong>
+                  {t('lbl_assigned_uhid')}: <strong>{successData.patient.uhid}</strong> • {t('lbl_queue_pos')}: <strong>#{successData.queue_position}</strong>
                 </p>
               </div>
             </div>
@@ -279,7 +289,7 @@ export const IntakePage: React.FC = () => {
           </div>
 
           <div className="bg-white/80 p-4 rounded-lg border border-emerald-200 text-xs text-slate-700 space-y-1.5">
-            <div className="font-semibold text-slate-900">Preliminary Assessment Evidence:</div>
+            <div className="font-semibold text-slate-900">{t('lbl_rule_evidence')}</div>
             <ul className="list-disc list-inside space-y-0.5 text-slate-600">
               {successData.triage_assessment.rule_evidence.map((ev, i) => (
                 <li key={i}>{ev}</li>
@@ -297,14 +307,14 @@ export const IntakePage: React.FC = () => {
               className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-md transition-colors flex items-center gap-1.5"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Register Next Patient
+              {t('btn_register_another')}
             </button>
             <button
               type="button"
               onClick={() => navigate('/queue')}
               className="px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-md transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
-              View in Dynamic Queue
+              {t('btn_go_to_queue')}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -316,14 +326,14 @@ export const IntakePage: React.FC = () => {
         {/* Section 1: Demographics */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="border-b border-slate-100 pb-3">
-            <h3 className="text-sm font-bold text-slate-900">1. Patient Demographics & Intake Desk</h3>
-            <p className="text-xs text-slate-500">Legal demographic identification and assigned department.</p>
+            <h3 className="text-sm font-bold text-slate-900">{t('sec_demographics')}</h3>
+            <p className="text-xs text-slate-500">{t('sec_demographics_sub')}</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Full Legal Name <span className="text-red-500">*</span>
+                {t('lbl_fullname')} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -338,7 +348,7 @@ export const IntakePage: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Age (Years) <span className="text-red-500">*</span>
+                {t('lbl_age')} <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -355,20 +365,20 @@ export const IntakePage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Biological Gender <span className="text-red-500">*</span>
+                {t('lbl_gender')} <span className="text-red-500">*</span>
               </label>
               <select
                 {...register('gender')}
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-teal-600 focus:border-teal-600 focus:outline-none"
               >
-                <option value="MALE">Male</option>
-                <option value="FEMALE">Female</option>
-                <option value="OTHER">Other</option>
+                <option value="MALE">{t('gender_male')}</option>
+                <option value="FEMALE">{t('gender_female')}</option>
+                <option value="OTHER">{t('gender_other')}</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('lbl_phone')}</label>
               <input
                 type="tel"
                 {...register('phone_number')}
@@ -378,29 +388,38 @@ export const IntakePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Assigned Department <span className="text-red-500">*</span>
-              </label>
-              <select
-                {...register('department_id')}
-                disabled={deptsLoading}
+              <label className="block text-xs font-semibold text-slate-700 mb-1">{t('lbl_emergency_phone')}</label>
+              <input
+                type="tel"
+                {...register('emergency_contact_phone')}
+                placeholder="+91-9876543299"
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-teal-600 focus:border-teal-600 focus:outline-none"
-              >
-                <option value="">Select Department...</option>
-                {departments?.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-              {errors.department_id && (
-                <p className="text-[11px] text-red-600 mt-1">{errors.department_id.message}</p>
-              )}
+              />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Residential Address</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              {t('lbl_dept')} <span className="text-red-500">*</span>
+            </label>
+            <select
+              {...register('department_id')}
+              className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-md focus:ring-1 focus:ring-teal-600 focus:border-teal-600 focus:outline-none"
+            >
+              <option value="">-- Choose Assigned Department --</option>
+              {departments?.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name} ({dept.code})
+                </option>
+              ))}
+            </select>
+            {errors.department_id && (
+              <p className="text-[11px] text-red-600 mt-1">{errors.department_id.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">{t('lbl_address')}</label>
             <input
               type="text"
               {...register('address')}
@@ -414,8 +433,8 @@ export const IntakePage: React.FC = () => {
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">2. Symptoms & Chief Complaint</h3>
-              <p className="text-xs text-slate-500">Record direct patient statements, timeline, and aggravating factors.</p>
+              <h3 className="text-sm font-bold text-slate-900">{t('sec_complaint')}</h3>
+              <p className="text-xs text-slate-500">{t('sec_complaint_sub')}</p>
             </div>
             <button
               type="button"
@@ -424,7 +443,7 @@ export const IntakePage: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition disabled:opacity-50"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isAiLoading ? 'animate-spin' : ''}`} />
-              {isAiLoading ? 'Analyzing...' : 'AI Summary Assistant'}
+              {isAiLoading ? 'Analyzing...' : t('btn_ai_assistant')}
             </button>
           </div>
 
@@ -465,14 +484,14 @@ export const IntakePage: React.FC = () => {
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Activity className="w-4 h-4 text-teal-700" />
-                3. Vital Sign Observations
+                {t('sec_vitals')}
               </h3>
-              <p className="text-xs text-slate-500">Measured baseline vital parameters with standard clinical units.</p>
+              <p className="text-xs text-slate-500">{t('sec_vitals_sub')}</p>
             </div>
 
             {/* Live Indicator */}
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-500 font-medium">Preliminary Urgency Preview:</span>
+              <span className="text-[11px] text-slate-500 font-medium">{t('lbl_preliminary_preview')}</span>
               <StatusBadge type="urgency" value={preview.category} />
             </div>
           </div>
@@ -481,7 +500,7 @@ export const IntakePage: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <Heart className="w-3.5 h-3.5 text-rose-500" />
-                BP Systolic (mmHg)
+                {t('lbl_bp_sys')}
               </label>
               <input
                 type="number"
@@ -494,7 +513,7 @@ export const IntakePage: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <Heart className="w-3.5 h-3.5 text-rose-400" />
-                BP Diastolic (mmHg)
+                {t('lbl_bp_dia')}
               </label>
               <input
                 type="number"
@@ -507,7 +526,7 @@ export const IntakePage: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <Activity className="w-3.5 h-3.5 text-red-500" />
-                Heart Rate (bpm)
+                {t('lbl_hr')}
               </label>
               <input
                 type="number"
@@ -520,7 +539,7 @@ export const IntakePage: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <Droplets className="w-3.5 h-3.5 text-blue-500" />
-                SpO2 (% Oxygen)
+                {t('lbl_spo2')}
               </label>
               <input
                 type="number"
@@ -533,7 +552,7 @@ export const IntakePage: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <Wind className="w-3.5 h-3.5 text-teal-600" />
-                Resp Rate (bpm)
+                {t('lbl_rr')}
               </label>
               <input
                 type="number"
@@ -546,7 +565,7 @@ export const IntakePage: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <Thermometer className="w-3.5 h-3.5 text-amber-500" />
-                Temp (°F)
+                {t('lbl_temp')}
               </label>
               <input
                 type="number"
@@ -560,7 +579,7 @@ export const IntakePage: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <Droplets className="w-3.5 h-3.5 text-purple-500" />
-                Blood Sugar (mg/dL)
+                {t('lbl_glucose')}
               </label>
               <input
                 type="number"
@@ -573,7 +592,7 @@ export const IntakePage: React.FC = () => {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
                 <Brain className="w-3.5 h-3.5 text-indigo-500" />
-                GCS (3 - 15)
+                {t('lbl_gcs')}
               </label>
               <input
                 type="number"
@@ -585,32 +604,32 @@ export const IntakePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Error notification if submission fails */}
-        {intakeMutation.isError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3 text-xs text-red-800">
-            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-            <span>
-              Registration failed: {(intakeMutation.error as Error)?.message || 'Please verify that backend is running.'}
-            </span>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-2">
+        {/* Form Submission Actions */}
+        <div className="flex items-center justify-between pt-2">
           <button
             type="button"
             onClick={() => reset()}
-            className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-md transition-colors"
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
           >
-            Clear Form
+            {t('btn_reset')}
           </button>
+
           <button
             type="submit"
-            disabled={intakeMutation.isPending}
-            className="px-6 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:bg-teal-400 rounded-md transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+            disabled={isSubmitting || intakeMutation.isPending}
+            className="px-6 py-2.5 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 disabled:bg-teal-400 rounded-lg shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
           >
-            {intakeMutation.isPending ? 'Enqueuing Patient...' : 'Save & Enqueue Patient'}
-            <ArrowRight className="w-4 h-4" />
+            {intakeMutation.isPending ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                {t('btn_submitting')}
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                {t('btn_submit_intake')}
+              </>
+            )}
           </button>
         </div>
       </form>
