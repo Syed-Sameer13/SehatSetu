@@ -3,6 +3,7 @@ from typing import List, Optional
 from app.schemas.patient import PatientResponse
 from app.schemas.intake import PatientIntakeRequest, PatientIntakeResponse
 from app.services.storage import store
+from app.services.sms_service import sms_service
 
 router = APIRouter()
 
@@ -20,6 +21,19 @@ async def register_patient_intake(intake: PatientIntakeRequest):
         )
 
     intake_data = store.process_intake(intake)
+    
+    # Dispatch SMS to patient mobile number
+    dept_name = dept.name if dept else "General OPD"
+    est_wait = max(5, intake_data.queue_position * 8)
+    sms_service.send_intake_sms(
+        patient_name=intake.full_name,
+        phone_number=intake.phone_number,
+        uhid=intake_data.patient.uhid,
+        department_name=dept_name,
+        queue_position=intake_data.queue_position,
+        estimated_wait_minutes=est_wait,
+    )
+
     return PatientIntakeResponse(
         success=True,
         data=intake_data,

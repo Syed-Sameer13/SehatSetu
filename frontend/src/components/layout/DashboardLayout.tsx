@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopNavbar } from './TopNavbar';
 import { HealthBanner } from '../common/HealthBanner';
+import { SMSAlertToast } from '../common/SMSAlertToast';
 import { useRealtimeSubscription } from '../../hooks/useRealtimeQueue';
 
 export const DashboardLayout: React.FC = () => {
@@ -16,6 +17,7 @@ export const DashboardLayout: React.FC = () => {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <HealthBanner />
         <TopNavbar />
+        <SMSAlertToast />
         <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
