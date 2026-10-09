@@ -35,7 +35,7 @@ export const TopNavbar: React.FC = () => {
           <button
             onClick={() => setLanguage('en')}
             className={`px-2 py-1 rounded-md text-[11px] font-semibold transition ${
-              language === 'en' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              language === 'en' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             EN
@@ -43,10 +43,18 @@ export const TopNavbar: React.FC = () => {
           <button
             onClick={() => setLanguage('hi')}
             className={`px-2 py-1 rounded-md text-[11px] font-semibold transition ${
-              language === 'hi' ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              language === 'hi' ? 'bg-white text-teal-800 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             हिन्दी
+          </button>
+          <button
+            onClick={() => setLanguage('te')}
+            className={`px-2 py-1 rounded-md text-[11px] font-semibold transition ${
+              language === 'te' ? 'bg-white text-teal-800 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            తెలుగు
           </button>
         </div>
 

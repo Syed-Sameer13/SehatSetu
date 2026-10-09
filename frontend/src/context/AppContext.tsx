@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { StaffRole } from '../types';
 
-export type Language = 'en' | 'hi';
+export type Language = 'en' | 'hi' | 'te';
 
 export interface SMSAlert {
   id: string;
@@ -370,6 +370,179 @@ const translations: Record<Language, Record<string, string>> = {
     col_new_state: 'स्थिति विवरण',
     col_reason: 'कारण / औचित्य',
   },
+  te: {
+    // Navigation & App Header (తెలుగు)
+    hospital_name: 'సేహత్‌సేతు',
+    hospital_tagline: 'స్మార్ట్ పేషెంట్ క్యూ & ట్రయాజ్ వ్యవస్థ',
+    hospital_ward: 'సివిల్ హాస్పిటల్ • వార్డ్ A',
+    clinical_ops: 'క్లినికల్ కార్యకలాపాలు (Operations)',
+    nav_overview: 'అవలోకనం (Overview)',
+    nav_intake: 'రోగి నమోదు (Intake)',
+    nav_queue: 'రోగి క్యూ (Queue)',
+    nav_analytics: 'విశ్లేషణలు (Analytics)',
+    nav_audit: 'ఆడిట్ లాగ్ (Audit)',
+    duty_station: 'డ్యూటీ స్టేషన్',
+    decision_support_title: 'క్లినికల్ నిర్ణయ మద్దతు మాత్రమే',
+    decision_support_desc: 'ఆటోమేటెడ్ ట్రయాజ్ ర్యాంకింగ్‌లు ప్రాథమిక సూచికలు మాత్రమే మరియు ధృవీకరించబడిన వైద్యుల తీర్పును భర్తీ చేయలేవు.',
+    search_placeholder: 'UHID, పేరు లేదా ఫోన్ ద్వారా రోగిని శోధించండి...',
+
+    // Staff Roles
+    role_doctor: 'వైద్యుడు (Doctor)',
+    role_nurse: 'ట్రయాజ్ నర్స్ (Nurse)',
+    role_registration: 'రిజిస్ట్రేషన్ డెస్క్ (Desk)',
+    role_admin: 'హాస్పిటల్ అడ్మిన్ (Admin)',
+
+    // Urgency Categories
+    urgency_critical: 'అత్యవసరం (CRITICAL)',
+    urgency_high: 'తీవ్రమైనది (HIGH)',
+    urgency_moderate: 'మధ్యస్థం (MODERATE)',
+    urgency_low: 'సాధారణం (LOW)',
+    urgency_needs_review: 'సమీక్ష అవసరం (NEEDS_REVIEW)',
+
+    // Visit Statuses
+    status_waiting: 'వేచి ఉన్నారు (WAITING)',
+    status_called: 'పిలిచారు (CALLED)',
+    status_in_consultation: 'కన్సల్టేషన్‌లో ఉన్నారు (IN_CONSULTATION)',
+    status_completed: 'పూర్తయింది (COMPLETED)',
+    status_cancelled: 'రద్దు చేయబడింది (CANCELLED)',
+
+    // Overview Page
+    overview_title: 'ఆసుపత్రి క్లినికల్ అవలోకనం',
+    overview_live_badge: 'లైవ్ కార్యకలాపాలు',
+    overview_subtitle: 'రియల్-టైమ్ రోగి నమోదు పర్యవేక్షణ, నియమిత ట్రయాజ్ ప్రాధాన్యత మరియు క్రియాశీల క్యూ నిర్వహణ.',
+    btn_new_intake: 'కొత్త రోగి నమోదు',
+    btn_view_queue: 'క్రియాశీల క్యూ చూడండి',
+    kpi_active_waiting: 'ప్రస్తుతం వేచి ఉన్నవారు',
+    kpi_active_waiting_sub: 'ట్రయాజ్ కాల్ కోసం వేచి ఉన్నారు',
+    kpi_critical: 'అత్యవసర విభాగం',
+    kpi_critical_sub: 'తక్షణ వైద్య పరిశీలన అవసరం',
+    kpi_avg_wait: 'సగటు నిరీక్షణ సమయం',
+    kpi_avg_wait_sub: 'నిర్ధారిత రాకల ఆధారంగా లెక్కించబడింది',
+    kpi_completed_today: 'ఈరోజు పూర్తయినవి',
+    kpi_completed_today_sub: 'వైద్య సంప్రదింపులు పూర్తయ్యాయి',
+    kpi_total_registered: 'మొత్తం నమోదైన రోగులు',
+    kpi_total_registered_sub: 'ఈరోజు మొత్తం రోగి రిజిస్ట్రేషన్లు',
+    overview_dept_title: 'ప్రత్యేక విభాగాల స్థితి',
+    overview_dept_desc: 'ఎమర్జెన్సీ మరియు ఔట్ పేషెంట్ విభాగాలలో రోగుల పంపిణీ.',
+    overview_workflow_title: 'క్లినికల్ వర్క్‌ఫ్లో నావిగేషన్',
+    wf_intake_title: '1. రోగి నమోదు & ట్రయాజ్ అంచనా',
+    wf_intake_sub: 'ట్రయాజ్ నియమాల కోసం డెమోగ్రాఫిక్స్, వైటల్స్ మరియు సమస్యలను నమోదు చేయండి',
+    wf_queue_title: '2. డైనమిక్ ప్రాధాన్యత క్యూ',
+    wf_queue_sub: 'తదుపరి రోగిని పిలవండి, వైటల్స్ సమీక్షించండి లేదా డాక్టర్ ఓవర్‌రైడ్ చేయండి',
+    wf_analytics_title: '3. ఆపరేషనల్ అనలిటిక్స్ & ట్రెండ్స్',
+    wf_analytics_sub: 'ట్రయాజ్ పంపిణీ, గంటల వారీ వేగం మరియు నిరీక్షణ సమయాలను చూడండి',
+    wf_audit_title: '4. శాశ్వత ఆడిట్ & కంప్లైయన్స్ లాగ్',
+    wf_audit_sub: 'వైద్యుల నిర్ణయాలు, ప్రాధాన్యత మార్పులు మరియు టైమ్‌స్టాంప్‌ల రికార్డు',
+
+    // Intake Page
+    intake_title: 'వేగవంతమైన రోగి నమోదు & అత్యవసర ట్రయాజ్',
+    intake_subtitle: 'ప్రాథమిక ట్రయాజ్ వర్గీకరణ కోసం రోగి వివరాలు మరియు ముఖ్య సూచికలను (Vitals) నమోదు చేయండి.',
+    synthetic_presets: 'డెమో కోసం త్వరిత డేటా (Presets):',
+    preset_critical: '🚨 అత్యవసర పరిస్థితి (గుండె సమస్య / SpO2 < 92%)',
+    preset_high: '⚠️ తీవ్రమైన పరిస్థితి (తీవ్ర జ్వరం / ఎక్కువ గుండె చప్పుడు)',
+    preset_low: '🟢 సాధారణ పరిస్థితి (నడుము నొప్పి)',
+    sec_demographics: '1. రోగి వివరాలు (Demographics)',
+    sec_demographics_sub: 'హాస్పిటల్ అధికారిక నమోదు మరియు సంప్రదింపు సమాచారం.',
+    lbl_fullname: 'రోగి పూర్తి పేరు',
+    lbl_age: 'వయస్సు (సంవత్సరాలు)',
+    lbl_gender: 'లింగం',
+    gender_male: 'పురుషుడు',
+    gender_female: 'స్త్రీ',
+    gender_other: 'ఇతర',
+    lbl_phone: 'సంప్రదింపు ఫోన్',
+    lbl_emergency_phone: 'అత్యవసర సంప్రదింపు ఫోన్',
+    lbl_dept: 'లక్ష్య విభాగం (Department)',
+    lbl_address: 'నివాస చిరునామా',
+    sec_complaint: '2. లక్షణాలు & ప్రధాన సమస్య (Chief Complaint)',
+    sec_complaint_sub: 'రోగి చెప్పిన సమస్య, వ్యవధి మరియు ఇతర లక్షణాలు నమోదు చేయండి.',
+    btn_ai_assistant: 'AI సారాంశ సహాయకుడు',
+    sec_vitals: '3. కీలక సంకేతాల పరిశీలన (Vital Signs)',
+    sec_vitals_sub: 'ప్రామాణిక క్లినికల్ యూనిట్లలో కొలిచిన బేస్‌లైన్ వైటల్ పారామితులు.',
+    lbl_preliminary_preview: 'ప్రాథమిక ట్రయాజ్ ప్రివ్యూ:',
+    lbl_bp_sys: 'రక్తపోటు సిస్టోలిక్ (BP Systolic)',
+    lbl_bp_dia: 'రక్తపోటు డయాస్టోలిక్ (BP Diastolic)',
+    lbl_hr: 'హృదయ స్పందన రేటు (Heart Rate - bpm)',
+    lbl_rr: 'శ్వాసకోశ రేటు (Respiratory Rate)',
+    lbl_spo2: 'ఆక్సిజన్ శాతం (SpO2 %)',
+    lbl_temp: 'ఉష్ణోగ్రత (Temperature °F)',
+    lbl_glucose: 'రక్తంలో చక్కెర (Blood Glucose mg/dL)',
+    lbl_gcs: 'గ్లాస్గో కోమా స్కేల్ (GCS 3-15)',
+    btn_reset: 'ఫారమ్ రీసెట్ చేయండి',
+    btn_submit_intake: 'నమోదు సమర్పించి క్యూలో చేర్చండి',
+    btn_submitting: 'ట్రయాజ్ లెక్కింపు & డేటా సేవ్ అవుతోంది...',
+    success_modal_title: 'రోగి నమోదు & ట్రయాజ్ విజయవంతంగా పూర్తయింది',
+    lbl_assigned_uhid: 'కేటాయించిన UHID టోకెన్',
+    lbl_queue_pos: 'క్యూ స్థానం (Queue Position)',
+    lbl_triage_category: 'ట్రయాజ్ వర్గం',
+    lbl_calculated_score: 'లెక్కించిన స్కోరు',
+    lbl_rule_evidence: 'ట్రయాజ్ నిబంధన కారణాలు:',
+    btn_register_another: 'మరొక రోగిని నమోదు చేయండి',
+    btn_go_to_queue: 'రోగి క్యూ వద్దకు వెళ్లండి',
+
+    // Queue Page
+    queue_title: 'డైనమిక్ రోగి ప్రాధాన్యత క్యూ',
+    queue_subtitle: 'ట్రయాజ్ అత్యవసరత మరియు నిరీక్షణ సమయం ఆధారంగా రియల్-టైమ్‌లో అమర్చబడింది.',
+    btn_call_next: '⚡ తదుపరి రోగిని పిలవండి',
+    btn_calling_patient: 'రోగిని పిలుస్తున్నారు...',
+    filter_dept: 'విభాగం ఎంచుకోండి:',
+    all_depts: 'అన్ని విభాగాలు',
+    tab_all: 'అన్ని స్థితులు',
+    tab_waiting: 'వేచి ఉన్నారు',
+    tab_called: 'పిలిచారు',
+    tab_consulting: 'కన్సల్టేషన్‌లో ఉన్నారు',
+    tab_completed: 'పూర్తయింది',
+    urgency_filter: 'అత్యవసర ఫిల్టర్:',
+    col_rank: 'ర్యాంక్',
+    col_patient_uhid: 'రోగి & UHID టోకెన్',
+    col_urgency: 'ట్రయాజ్ అత్యవసరత',
+    col_wait: 'నిరీక్షణ సమయం',
+    col_priority_rank: 'ప్రాధాన్యత స్కోరు',
+    col_complaint_evidence: 'ప్రధాన సమస్య & ఆధారాలు',
+    col_actions: 'చర్యలు',
+    btn_review: 'సమీక్షించండి',
+    modal_vitals_title: 'నమోదైన కీలక సంకేతాలు (Vitals)',
+    modal_reported_symptoms: 'రోగి చెప్పిన సమస్యలు:',
+    modal_ai_assistant: 'AI క్లినికల్ సారాంశ సహాయకుడు',
+    btn_generate_ai: 'AI సారాంశం రూపొందించండి',
+    modal_rule_exp: 'ట్రయాజ్ నియమ వివరణలు:',
+    btn_override_urgency: 'ట్రయాజ్ వర్గాన్ని మార్చండి (Override)',
+    btn_mark_called: 'పిలిచినట్లు గుర్తించండి',
+    btn_start_consultation: 'కన్సల్టేషన్ ప్రారంభించండి',
+    btn_mark_completed: 'పూర్తయినట్లు గుర్తించండి',
+    btn_cancel_visit: 'విజిట్ రద్దు చేయండి',
+    override_dialog_title: 'ట్రయాజ్ వర్గాన్ని మాన్యువల్‌గా మార్చండి',
+    override_target_cat: 'కొత్త లక్ష్య వర్గం',
+    override_reason_lbl: 'క్లినికల్ సమర్థన కారణం',
+    btn_confirm_override: 'మార్పును నిర్ధారించండి',
+    btn_saving_override: 'సేవ్ అవుతోంది...',
+
+    // Analytics Page
+    analytics_title: 'ఆసుపత్రి నిర్వహణ విశ్లేషణలు',
+    analytics_live_badge: 'లైవ్ రియల్-టైమ్',
+    analytics_subtitle: 'రోగి ట్రయాజ్ పంపిణీ, నిరీక్షణ సమయాలు, విభాగాల పనిభారం మరియు రోగుల రాక వేగం.',
+    btn_refresh: 'డేటా రిఫ్రెష్ చేయండి',
+    chart_triage_dist: 'ట్రయాజ్ వర్గీకరణ పంపిణీ',
+    chart_triage_dist_sub: 'అత్యవసర స్థాయిల ప్రకారం రోగుల శాతం',
+    chart_inflow: 'గంటల వారీగా రోగుల రాక',
+    chart_inflow_sub: 'వివిధ షిఫ్ట్‌లలో రిజిస్ట్రేషన్ల వేగం',
+    chart_dept_load: 'విభాగాల క్యూ & నిరీక్షణ సమయాలు',
+    chart_dept_load_sub: 'విభాగాల వారీగా యాక్టివ్ క్యూ మరియు సగటు నిరీక్షణ సమయం',
+    tbl_dept: 'విభాగం',
+    tbl_waiting: 'వేచి ఉన్నవారు',
+    tbl_consulting: 'కన్సల్టేషన్‌లో',
+    tbl_completed: 'ఈరోజు పూర్తయినవి',
+    tbl_avg_wait: 'సగటు నిరీక్షణ',
+
+    // Audit Page
+    audit_title: 'క్లినికల్ ఆడిట్ & కంప్లైయన్స్ లాగ్',
+    audit_subtitle: 'రోగి రిజిస్ట్రేషన్లు, ట్రయాజ్ అంచనాలు మరియు స్థితి మార్పుల శాశ్వత రికార్డు.',
+    audit_live_badge: 'శాశ్వత లాగ్',
+    col_timestamp: 'సమయం',
+    col_action: 'చర్య రకం',
+    col_visit_id: 'విజిట్ ID',
+    col_new_state: 'స్థితి వివరాలు',
+    col_reason: 'కారణం / సమర్థన',
+  },
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -417,14 +590,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const triggerCallAlert = (uhid: string, patientName: string, phone: string, room: string) => {
     playHospitalChime();
 
+    let alertMsg = `[SehatSetu Alert] Dear ${patientName}, your token (${uhid}) has been called to ${room}. Please proceed immediately.`;
+    if (language === 'hi') {
+      alertMsg = `[सेहत सेतु सूचना] प्रिय ${patientName}, आपका टोकन (${uhid}) ${room} में बुलाया गया है। कृपया तुरंत उपस्थित हों।`;
+    } else if (language === 'te') {
+      alertMsg = `[సేహత్‌సేతు అలర్ట్] గౌరవనీయ ${patientName}, మీ టోకెన్ (${uhid}) ${room} లోకి పిలవబడింది. దయచేసి వెంటనే హాజరుకాగలరు.`;
+    }
+
     const newAlert: SMSAlert = {
       id: Math.random().toString(36).substring(7),
       uhid,
       patientName,
       phone: phone || '+91-9876543210',
-      message: language === 'hi'
-        ? `[सेहत सेतु सूचना] प्रिय ${patientName}, आपका टोकन (${uhid}) ${room} में बुलाया गया है। कृपया तुरंत उपस्थित हों।`
-        : `[SehatSetu Alert] Dear ${patientName}, your token (${uhid}) has been called to ${room}. Please proceed immediately.`,
+      message: alertMsg,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 

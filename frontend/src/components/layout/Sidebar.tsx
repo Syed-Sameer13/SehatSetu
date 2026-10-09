@@ -37,7 +37,7 @@ export const Sidebar: React.FC = () => {
       {/* Navigation Links */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-          Clinical Operations
+          {t('clinical_ops')}
         </div>
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -64,10 +64,10 @@ export const Sidebar: React.FC = () => {
       <div className="p-4 m-3 bg-amber-50/70 border border-amber-200/80 rounded-lg text-xs text-amber-900">
         <div className="flex items-center gap-1.5 font-semibold text-amber-800 mb-1">
           <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" />
-          <span>Decision Support Only</span>
+          <span>{t('decision_support_title')}</span>
         </div>
         <p className="text-[11px] leading-relaxed text-amber-700">
-          Automated triage rankings are preliminary indicators and do not replace certified clinical judgment.
+          {t('decision_support_desc')}
         </p>
       </div>
 
@@ -84,7 +84,7 @@ export const Sidebar: React.FC = () => {
               {role === 'REGISTRATION' && 'Intake Desk Staff'}
               {role === 'ADMIN' && 'Medical Superintendant'}
             </span>
-            <span className="text-[10px] text-teal-700 font-semibold">{role} • Civil Hospital</span>
+            <span className="text-[10px] text-teal-700 font-semibold">{t('duty_station')} • {t('hospital_ward')}</span>
           </div>
         </div>
       </div>
