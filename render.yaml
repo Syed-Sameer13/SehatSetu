@@ -1,13 +1,26 @@
 services:
   - type: web
-    name: sehatsetu-api
+    name: sehatsetu-backend
     runtime: python
-    buildCommand: "cd backend && pip install -r requirements.txt"
-    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
     envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: "https://sehatsetu.vercel.app,http://localhost:5173"
+      - key: ENABLE_AI_SUMMARIZATION
+        value: "true"
+      - key: AI_MODEL_NAME
+        value: "gemini-1.5-flash"
+      - key: GEMINI_API_KEY
+        sync: false
       - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: CORS_ORIGINS
-        value: "*"
