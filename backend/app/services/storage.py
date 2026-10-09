@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from app.schemas.department import DepartmentResponse
 from app.schemas.patient import PatientResponse
@@ -9,19 +9,48 @@ from app.schemas.intake import PatientIntakeRequest, PatientIntakeData
 from app.schemas.queue import QueueEntryResponse
 from app.schemas.audit import AuditLogResponse
 from app.services.triage_engine import evaluate_triage, URGENCY_WEIGHTS
+from app.core.supabase import get_supabase_client
 
 
-class InMemoryDataStore:
+def parse_iso_datetime(val: Any) -> datetime:
+    """Robust ISO 8601 parser handling variable-length fractional seconds in Python 3.10."""
+    if isinstance(val, datetime):
+        return val
+    if not val or not isinstance(val, str):
+        return datetime.now(timezone.utc)
+    s = val.replace("Z", "+00:00")
+    if "." in s:
+        try:
+            main_part, frac_and_tz = s.split(".", 1)
+            if "+" in frac_and_tz:
+                frac, tz = frac_and_tz.split("+", 1)
+                tz_str = "+" + tz
+            elif "-" in frac_and_tz:
+                frac, tz = frac_and_tz.split("-", 1)
+                tz_str = "-" + tz
+            else:
+                frac = frac_and_tz
+                tz_str = "+00:00"
+            frac = (frac + "000000")[:6]
+            s = f"{main_part}.{frac}{tz_str}"
+        except Exception:
+            pass
+    try:
+        return datetime.fromisoformat(s)
+    except Exception:
+        return datetime.now(timezone.utc)
+
+
+class DataStore:
     def __init__(self):
-        self.departments: Dict[str, DepartmentResponse] = {}
-        self.patients: Dict[str, PatientResponse] = {}
-        self.visits: Dict[str, VisitResponse] = {}
-        self.triage_assessments: Dict[str, TriageAssessmentResponse] = {}
-        self.audit_logs: List[AuditLogResponse] = []
-        self._seed_initial_data()
+        self.fallback_departments: Dict[str, DepartmentResponse] = {}
+        self.fallback_patients: Dict[str, PatientResponse] = {}
+        self.fallback_visits: Dict[str, VisitResponse] = {}
+        self.fallback_triage: Dict[str, TriageAssessmentResponse] = {}
+        self.fallback_audit_logs: List[AuditLogResponse] = []
+        self._seed_fallback_data()
 
-    def _seed_initial_data(self):
-        # 1. Seed departments
+    def _seed_fallback_data(self):
         now = datetime.now(timezone.utc)
         depts = [
             DepartmentResponse(
@@ -50,90 +79,7 @@ class InMemoryDataStore:
             ),
         ]
         for d in depts:
-            self.departments[d.id] = d
-
-        # 2. Seed synthetic demo patients and visits with different wait times and urgencies
-        dept_er = depts[0].id
-
-        # Patient 1: Moderate (Arrived 35 mins ago)
-        p1 = PatientResponse(
-            id="c1f72a4e-1234-5678-9abc-def012345678",
-            uhid="SS-2026-0001",
-            full_name="Rajesh Patel",
-            age=35,
-            gender="MALE",
-            phone_number="+91-9876543212",
-            address="12/4, Station Road, Ahmedabad, GJ",
-            created_at=now - timedelta(minutes=35),
-            updated_at=now - timedelta(minutes=35),
-        )
-        self.patients[p1.id] = p1
-        v1_id = "v1-rajesh-patel"
-        v1 = VisitResponse(
-            id=v1_id,
-            patient_id=p1.id,
-            department_id=dept_er,
-            chief_complaint="Moderate right ankle sprain and swelling after slipping on stairs.",
-            vital_observations=VitalObservations(
-                systolic_bp=128, diastolic_bp=82, heart_rate=78, spo2=98, temperature_f=98.6, gcs=15
-            ),
-            status="WAITING",
-            arrival_time=now - timedelta(minutes=35),
-            created_at=now - timedelta(minutes=35),
-            updated_at=now - timedelta(minutes=35),
-        )
-        self.visits[v1_id] = v1
-        self.triage_assessments[v1_id] = TriageAssessmentResponse(
-            id="t1-rajesh",
-            visit_id=v1_id,
-            urgency_category="MODERATE",
-            urgency_score=35,
-            rule_evidence=["Stable vitals recorded.", "Moderate localized ankle trauma."],
-            missing_vital_flags=[],
-            is_overridden=False,
-            created_at=now - timedelta(minutes=35),
-            updated_at=now - timedelta(minutes=35),
-        )
-
-        # Patient 2: High Urgency (Arrived 20 mins ago)
-        p2 = PatientResponse(
-            id="d2e83b5f-5678-9abc-def0-123456789abc",
-            uhid="SS-2026-0002",
-            full_name="Sunita Devi",
-            age=62,
-            gender="FEMALE",
-            phone_number="+91-9876543211",
-            address="Flat 102, Shanti Nagar, Lucknow, UP",
-            created_at=now - timedelta(minutes=20),
-            updated_at=now - timedelta(minutes=20),
-        )
-        self.patients[p2.id] = p2
-        v2_id = "v2-sunita-devi"
-        v2 = VisitResponse(
-            id=v2_id,
-            patient_id=p2.id,
-            department_id=dept_er,
-            chief_complaint="High grade fever for 3 days with persistent vomiting, extreme lethargy and dizziness.",
-            vital_observations=VitalObservations(
-                systolic_bp=110, diastolic_bp=70, heart_rate=114, spo2=95, temperature_f=103.0, gcs=15
-            ),
-            status="WAITING",
-            arrival_time=now - timedelta(minutes=20),
-            created_at=now - timedelta(minutes=20),
-            updated_at=now - timedelta(minutes=20),
-        )
-        self.visits[v2_id] = v2
-        self.triage_assessments[v2_id] = TriageAssessmentResponse(
-            id="t2-sunita",
-            visit_id=v2_id,
-            urgency_category="HIGH",
-            urgency_score=75,
-            rule_evidence=["Marked Tachycardia: 114 bpm", "High Fever: 103.0°F"],
-            missing_vital_flags=[],
-            is_overridden=False,
-            created_at=now - timedelta(minutes=20),
-            updated_at=now - timedelta(minutes=20),
-        )
+            self.fallback_departments[d.id] = d
 
     def log_audit(
         self,
@@ -143,51 +89,187 @@ class InMemoryDataStore:
         new_state: Optional[Dict[str, Any]] = None,
         reason: Optional[str] = None,
     ):
+        now = datetime.now(timezone.utc)
+        log_id = str(uuid.uuid4())
+        client = get_supabase_client()
+
+        if client:
+            try:
+                client.table("audit_logs").insert({
+                    "id": log_id,
+                    "visit_id": visit_id,
+                    "action_type": action_type,
+                    "previous_state": previous_state,
+                    "new_state": new_state,
+                    "reason": reason,
+                    "ip_address": "127.0.0.1",
+                    "created_at": now.isoformat(),
+                }).execute()
+                return
+            except Exception as e:
+                print(f"[Supabase Audit Error] {e}")
+
+        # Fallback in-memory
         entry = AuditLogResponse(
-            id=str(uuid.uuid4()),
+            id=log_id,
             visit_id=visit_id,
             action_type=action_type,
             previous_state=previous_state,
             new_state=new_state,
             reason=reason,
             ip_address="127.0.0.1",
-            created_at=datetime.now(timezone.utc),
+            created_at=now,
         )
-        self.audit_logs.append(entry)
+        self.fallback_audit_logs.append(entry)
 
     def get_departments(self) -> List[DepartmentResponse]:
-        return list(self.departments.values())
+        client = get_supabase_client()
+        if client:
+            try:
+                res = client.table("departments").select("*").eq("is_active", True).execute()
+                if res.data:
+                    return [
+                        DepartmentResponse(
+                            id=row["id"],
+                            code=row["code"],
+                            name=row["name"],
+                            description=row.get("description"),
+                            is_active=row.get("is_active", True),
+                            created_at=parse_iso_datetime(row["created_at"]),
+                        )
+                        for row in res.data
+                    ]
+            except Exception as e:
+                print(f"[Supabase get_departments Error] {e}")
+
+        return list(self.fallback_departments.values())
 
     def get_department_by_id(self, dept_id: str) -> Optional[DepartmentResponse]:
-        return self.departments.get(dept_id)
+        depts = self.get_departments()
+        for d in depts:
+            if d.id == dept_id:
+                return d
+        return None
 
     def get_patients(self, search: Optional[str] = None) -> List[PatientResponse]:
-        patients = list(self.patients.values())
+        client = get_supabase_client()
+        if client:
+            try:
+                query = client.table("patients").select("*")
+                if search:
+                    query = query.ilike("full_name", f"%{search}%")
+                res = query.order("created_at", desc=True).execute()
+                if res.data:
+                    return [
+                        PatientResponse(
+                            id=row["id"],
+                            uhid=row["uhid"],
+                            full_name=row["full_name"],
+                            age=row["age"],
+                            gender=row["gender"],
+                            phone_number=row.get("phone_number"),
+                            emergency_contact_phone=row.get("emergency_contact_phone"),
+                            address=row.get("address"),
+                            created_at=parse_iso_datetime(row["created_at"]),
+                            updated_at=parse_iso_datetime(row.get("updated_at", row["created_at"])),
+                        )
+                        for row in res.data
+                    ]
+            except Exception as e:
+                print(f"[Supabase get_patients Error] {e}")
+
+        patients = list(self.fallback_patients.values())
         if search:
             s = search.lower()
             return [p for p in patients if s in p.full_name.lower() or s in p.uhid.lower()]
         return patients
 
     def get_patient_by_id(self, patient_id: str) -> Optional[PatientResponse]:
-        return self.patients.get(patient_id)
+        client = get_supabase_client()
+        if client:
+            try:
+                res = client.table("patients").select("*").eq("id", patient_id).execute()
+                if res.data:
+                    row = res.data[0]
+                    return PatientResponse(
+                        id=row["id"],
+                        uhid=row["uhid"],
+                        full_name=row["full_name"],
+                        age=row["age"],
+                        gender=row["gender"],
+                        phone_number=row.get("phone_number"),
+                        emergency_contact_phone=row.get("emergency_contact_phone"),
+                        address=row.get("address"),
+                        created_at=parse_iso_datetime(row["created_at"]),
+                        updated_at=parse_iso_datetime(row.get("updated_at", row["created_at"])),
+                    )
+            except Exception as e:
+                print(f"[Supabase get_patient_by_id Error] {e}")
 
-    def get_patient_by_uhid(self, uhid: str) -> Optional[PatientResponse]:
-        for p in self.patients.values():
-            if p.uhid.lower() == uhid.lower():
-                return p
-        return None
+        return self.fallback_patients.get(patient_id)
 
     def create_or_get_patient(self, intake: PatientIntakeRequest) -> PatientResponse:
         now = datetime.now(timezone.utc)
-        if intake.uhid:
-            existing = self.get_patient_by_uhid(intake.uhid)
-            if existing:
-                return existing
+        client = get_supabase_client()
 
+        if client:
+            try:
+                if intake.uhid:
+                    existing = client.table("patients").select("*").eq("uhid", intake.uhid).execute()
+                    if existing.data:
+                        row = existing.data[0]
+                        return PatientResponse(
+                            id=row["id"],
+                            uhid=row["uhid"],
+                            full_name=row["full_name"],
+                            age=row["age"],
+                            gender=row["gender"],
+                            phone_number=row.get("phone_number"),
+                            emergency_contact_phone=row.get("emergency_contact_phone"),
+                            address=row.get("address"),
+                            created_at=parse_iso_datetime(row["created_at"]),
+                            updated_at=parse_iso_datetime(row.get("updated_at", row["created_at"])),
+                        )
+
+                count_res = client.table("patients").select("id", count="exact").execute()
+                total_count = (count_res.count or 0) + 1
+                uhid = intake.uhid or f"SS-2026-{total_count:04d}"
+                patient_id = str(uuid.uuid4())
+
+                insert_res = client.table("patients").insert({
+                    "id": patient_id,
+                    "uhid": uhid,
+                    "full_name": intake.full_name,
+                    "age": intake.age,
+                    "gender": intake.gender,
+                    "phone_number": intake.phone_number,
+                    "emergency_contact_phone": intake.emergency_contact_phone,
+                    "address": intake.address,
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                }).execute()
+
+                if insert_res.data:
+                    row = insert_res.data[0]
+                    return PatientResponse(
+                        id=row["id"],
+                        uhid=row["uhid"],
+                        full_name=row["full_name"],
+                        age=row["age"],
+                        gender=row["gender"],
+                        phone_number=row.get("phone_number"),
+                        emergency_contact_phone=row.get("emergency_contact_phone"),
+                        address=row.get("address"),
+                        created_at=now,
+                        updated_at=now,
+                    )
+            except Exception as e:
+                print(f"[Supabase create_or_get_patient Error] {e}")
+
+        # Fallback
         patient_id = str(uuid.uuid4())
-        uhid_count = len(self.patients) + 1
+        uhid_count = len(self.fallback_patients) + 1
         uhid = intake.uhid or f"SS-2026-{uhid_count:04d}"
-
         patient = PatientResponse(
             id=patient_id,
             uhid=uhid,
@@ -200,7 +282,7 @@ class InMemoryDataStore:
             created_at=now,
             updated_at=now,
         )
-        self.patients[patient_id] = patient
+        self.fallback_patients[patient_id] = patient
         return patient
 
     def process_intake(self, intake: PatientIntakeRequest) -> PatientIntakeData:
@@ -208,6 +290,55 @@ class InMemoryDataStore:
         patient = self.create_or_get_patient(intake)
 
         visit_id = str(uuid.uuid4())
+        vitals_dict = intake.vital_observations.model_dump(exclude_none=True)
+
+        triage_eval = evaluate_triage(
+            vitals=intake.vital_observations,
+            chief_complaint=intake.chief_complaint,
+            age=intake.age,
+        )
+        triage_id = str(uuid.uuid4())
+
+        client = get_supabase_client()
+        if client:
+            try:
+                client.table("visits").insert({
+                    "id": visit_id,
+                    "patient_id": patient.id,
+                    "department_id": intake.department_id,
+                    "status": "WAITING",
+                    "chief_complaint": intake.chief_complaint,
+                    "vital_observations": vitals_dict,
+                    "arrival_time": now.isoformat(),
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                }).execute()
+
+                client.table("triage_assessments").insert({
+                    "id": triage_id,
+                    "visit_id": visit_id,
+                    "urgency_category": triage_eval.urgency_category,
+                    "urgency_score": triage_eval.urgency_score,
+                    "rule_evidence": triage_eval.rule_evidence,
+                    "missing_vital_flags": triage_eval.missing_vital_flags,
+                    "is_overridden": False,
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                }).execute()
+
+                self.log_audit(
+                    action_type="PATIENT_INTAKE",
+                    visit_id=visit_id,
+                    new_state={
+                        "patient_name": patient.full_name,
+                        "uhid": patient.uhid,
+                        "urgency_category": triage_eval.urgency_category,
+                        "urgency_score": triage_eval.urgency_score,
+                    },
+                )
+            except Exception as e:
+                print(f"[Supabase process_intake Write Error] {e}")
+
         visit = VisitResponse(
             id=visit_id,
             patient_id=patient.id,
@@ -219,16 +350,8 @@ class InMemoryDataStore:
             created_at=now,
             updated_at=now,
         )
-        self.visits[visit_id] = visit
+        self.fallback_visits[visit_id] = visit
 
-        # Execute Deterministic Triage Rules Engine
-        triage_eval = evaluate_triage(
-            vitals=intake.vital_observations,
-            chief_complaint=intake.chief_complaint,
-            age=intake.age,
-        )
-
-        triage_id = str(uuid.uuid4())
         triage = TriageAssessmentResponse(
             id=triage_id,
             visit_id=visit_id,
@@ -240,20 +363,8 @@ class InMemoryDataStore:
             created_at=now,
             updated_at=now,
         )
-        self.triage_assessments[visit_id] = triage
+        self.fallback_triage[visit_id] = triage
 
-        # Log audit entry
-        self.log_audit(
-            action_type="PATIENT_INTAKE",
-            visit_id=visit_id,
-            new_state={
-                "patient_name": patient.full_name,
-                "urgency_category": triage.urgency_category,
-                "urgency_score": triage.urgency_score,
-            },
-        )
-
-        # Compute queue position
         queue = self.get_queue(department_id=intake.department_id, status="WAITING")
         position = 1
         for idx, entry in enumerate(queue):
@@ -274,34 +385,92 @@ class InMemoryDataStore:
         status: Optional[str] = "WAITING",
     ) -> List[QueueEntryResponse]:
         now = datetime.now(timezone.utc)
-        entries: List[QueueEntryResponse] = []
+        client = get_supabase_client()
 
-        for visit in self.visits.values():
+        if client:
+            try:
+                query = client.table("visits").select("*, patients(*), triage_assessments(*), departments(name)")
+                if department_id:
+                    query = query.eq("department_id", department_id)
+                if status and status != "ALL":
+                    query = query.eq("status", status)
+
+                res = query.execute()
+                if res.data:
+                    entries: List[QueueEntryResponse] = []
+                    for row in res.data:
+                        patient_data = row.get("patients") or {}
+                        triage_data = row.get("triage_assessments") or {}
+                        dept_data = row.get("departments") or {}
+
+                        urgency_cat = triage_data.get("urgency_category") or "LOW"
+                        urgency_score = triage_data.get("urgency_score") or 0
+                        evidence = triage_data.get("rule_evidence") or []
+                        is_overridden = triage_data.get("is_overridden", False)
+                        override_reason = triage_data.get("override_reason")
+
+                        arrival_time = parse_iso_datetime(row["arrival_time"])
+                        wait_seconds = max((now - arrival_time).total_seconds(), 0)
+                        wait_minutes = int(wait_seconds // 60)
+
+                        base_weight = URGENCY_WEIGHTS.get(urgency_cat, 500)
+                        priority_rank = base_weight + (wait_minutes * 10)
+
+                        vitals_raw = row.get("vital_observations") or {}
+                        vitals_obj = VitalObservations(**vitals_raw) if isinstance(vitals_raw, dict) else VitalObservations()
+
+                        entries.append(
+                            QueueEntryResponse(
+                                visit_id=row["id"],
+                                patient_id=row["patient_id"],
+                                uhid=patient_data.get("uhid", "SS-2026-XXXX"),
+                                full_name=patient_data.get("full_name", "Unknown Patient"),
+                                age=patient_data.get("age", 0),
+                                gender=patient_data.get("gender", "OTHER"),
+                                department_id=row["department_id"],
+                                department_name=dept_data.get("name", "Clinical Department"),
+                                urgency_category=urgency_cat,
+                                urgency_score=urgency_score,
+                                status=row["status"],
+                                arrival_time=arrival_time,
+                                waiting_duration_minutes=wait_minutes,
+                                calculated_priority_rank=priority_rank,
+                                chief_complaint=row.get("chief_complaint", ""),
+                                rule_evidence=evidence,
+                                vital_observations=vitals_obj,
+                                is_overridden=is_overridden,
+                                override_reason=override_reason,
+                            )
+                        )
+
+                    entries.sort(key=lambda x: (-x.calculated_priority_rank, x.arrival_time))
+                    return entries
+            except Exception as e:
+                print(f"[Supabase get_queue Error] {e}")
+
+        # Fallback
+        entries = []
+        for visit in self.fallback_visits.values():
             if department_id and visit.department_id != department_id:
                 continue
             if status and status != "ALL" and visit.status != status:
                 continue
 
-            patient = self.patients.get(visit.patient_id)
+            patient = self.fallback_patients.get(visit.patient_id)
             if not patient:
                 continue
 
-            triage = self.triage_assessments.get(visit.id)
+            triage = self.fallback_triage.get(visit.id)
             urgency_cat = triage.urgency_category if triage else "LOW"
             urgency_score = triage.urgency_score if triage else 0
             evidence = triage.rule_evidence if triage else []
-            is_overridden = triage.is_overridden if triage else False
-            override_reason = triage.override_reason if triage else None
 
-            # Calculate elapsed wait minutes
             wait_seconds = max((now - visit.arrival_time).total_seconds(), 0)
             wait_minutes = int(wait_seconds // 60)
-
-            # Dynamic Priority Rank Formula: Base Urgency Weight + (Wait Minutes * 10)
             base_weight = URGENCY_WEIGHTS.get(urgency_cat, 500)
             priority_rank = base_weight + (wait_minutes * 10)
 
-            dept = self.departments.get(visit.department_id)
+            dept = self.fallback_departments.get(visit.department_id)
             dept_name = dept.name if dept else "General Department"
 
             entries.append(
@@ -323,12 +492,11 @@ class InMemoryDataStore:
                     chief_complaint=visit.chief_complaint,
                     rule_evidence=evidence,
                     vital_observations=visit.vital_observations,
-                    is_overridden=is_overridden,
-                    override_reason=override_reason,
+                    is_overridden=triage.is_overridden if triage else False,
+                    override_reason=triage.override_reason if triage else None,
                 )
             )
 
-        # Sort strictly by priority_rank DESC, arrival_time ASC
         entries.sort(key=lambda x: (-x.calculated_priority_rank, x.arrival_time))
         return entries
 
@@ -336,90 +504,202 @@ class InMemoryDataStore:
         self, department_id: str, room_or_desk: str = "Consultation Room 1"
     ) -> Optional[QueueEntryResponse]:
         now = datetime.now(timezone.utc)
-        # Get active waiting queue
         queue = self.get_queue(department_id=department_id, status="WAITING")
         if not queue:
             return None
 
-        # Top patient in queue
         top_entry = queue[0]
-        visit = self.visits.get(top_entry.visit_id)
-        if visit:
-            prev_status = visit.status
-            visit.status = "CALLED"
-            visit.called_at = now
-            visit.updated_at = now
+        client = get_supabase_client()
 
-            self.log_audit(
-                action_type="CALL_NEXT",
-                visit_id=visit.id,
-                previous_state={"status": prev_status},
-                new_state={"status": "CALLED", "room": room_or_desk},
-            )
+        if client:
+            try:
+                client.table("visits").update({
+                    "status": "CALLED",
+                    "called_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                }).eq("id", top_entry.visit_id).execute()
 
-        # Return updated entry
-        updated_queue = self.get_queue(department_id=department_id, status="CALLED")
-        for q in updated_queue:
-            if q.visit_id == top_entry.visit_id:
-                return q
+                self.log_audit(
+                    action_type="CALL_NEXT",
+                    visit_id=top_entry.visit_id,
+                    previous_state={"status": "WAITING"},
+                    new_state={"status": "CALLED", "room": room_or_desk},
+                )
+            except Exception as e:
+                print(f"[Supabase call_next Error] {e}")
+
+        top_entry.status = "CALLED"
         return top_entry
 
     def update_visit_status(
         self, visit_id: str, new_status: VisitStatusType, notes: Optional[str] = None
     ) -> Optional[VisitResponse]:
         now = datetime.now(timezone.utc)
-        visit = self.visits.get(visit_id)
-        if not visit:
-            return None
+        client = get_supabase_client()
 
-        prev_status = visit.status
-        visit.status = new_status
-        visit.updated_at = now
+        if client:
+            try:
+                update_data: Dict[str, Any] = {
+                    "status": new_status,
+                    "updated_at": now.isoformat(),
+                }
+                if new_status == "IN_CONSULTATION":
+                    update_data["consultation_started_at"] = now.isoformat()
+                elif new_status == "COMPLETED":
+                    update_data["completed_at"] = now.isoformat()
 
-        if new_status == "IN_CONSULTATION" and not visit.consultation_started_at:
-            visit.consultation_started_at = now
-        elif new_status == "COMPLETED" and not visit.completed_at:
-            visit.completed_at = now
+                res = client.table("visits").update(update_data).eq("id", visit_id).execute()
+                if res.data:
+                    row = res.data[0]
+                    self.log_audit(
+                        action_type="STATUS_UPDATE",
+                        visit_id=visit_id,
+                        new_state={"status": new_status, "notes": notes},
+                    )
+                    return VisitResponse(
+                        id=row["id"],
+                        patient_id=row["patient_id"],
+                        department_id=row["department_id"],
+                        chief_complaint=row["chief_complaint"],
+                        vital_observations=VitalObservations(**(row.get("vital_observations") or {})),
+                        status=row["status"],
+                        arrival_time=parse_iso_datetime(row["arrival_time"]),
+                        called_at=parse_iso_datetime(row["called_at"]) if row.get("called_at") else None,
+                        consultation_started_at=parse_iso_datetime(row["consultation_started_at"]) if row.get("consultation_started_at") else None,
+                        completed_at=parse_iso_datetime(row["completed_at"]) if row.get("completed_at") else None,
+                        created_at=parse_iso_datetime(row["created_at"]),
+                        updated_at=now,
+                    )
+            except Exception as e:
+                print(f"[Supabase update_visit_status Error] {e}")
 
-        self.log_audit(
-            action_type="STATUS_UPDATE",
-            visit_id=visit.id,
-            previous_state={"status": prev_status},
-            new_state={"status": new_status, "notes": notes},
-        )
-        return visit
+        v = self.fallback_visits.get(visit_id)
+        if v:
+            v.status = new_status
+            v.updated_at = now
+            return v
+        return None
 
     def override_triage_urgency(
         self, visit_id: str, new_category: UrgencyCategoryType, reason: str
     ) -> Optional[TriageAssessmentResponse]:
         now = datetime.now(timezone.utc)
-        triage = self.triage_assessments.get(visit_id)
-        if not triage:
-            return None
+        client = get_supabase_client()
 
-        prev_category = triage.urgency_category
-        triage.urgency_category = new_category
-        triage.is_overridden = True
-        triage.override_reason = reason
-        triage.updated_at = now
+        if client:
+            try:
+                res = client.table("triage_assessments").update({
+                    "urgency_category": new_category,
+                    "is_overridden": True,
+                    "override_reason": reason,
+                    "updated_at": now.isoformat(),
+                }).eq("visit_id", visit_id).execute()
 
-        self.log_audit(
-            action_type="PRIORITY_OVERRIDE",
-            visit_id=visit_id,
-            previous_state={"urgency_category": prev_category},
-            new_state={"urgency_category": new_category, "reason": reason},
-            reason=reason,
-        )
-        return triage
+                if res.data:
+                    row = res.data[0]
+                    self.log_audit(
+                        action_type="PRIORITY_OVERRIDE",
+                        visit_id=visit_id,
+                        new_state={"urgency_category": new_category, "reason": reason},
+                        reason=reason,
+                    )
+                    return TriageAssessmentResponse(
+                        id=row["id"],
+                        visit_id=row["visit_id"],
+                        urgency_category=row["urgency_category"],
+                        urgency_score=row["urgency_score"],
+                        rule_evidence=row.get("rule_evidence") or [],
+                        missing_vital_flags=row.get("missing_vital_flags") or [],
+                        is_overridden=True,
+                        override_reason=reason,
+                        created_at=parse_iso_datetime(row["created_at"]),
+                        updated_at=now,
+                    )
+            except Exception as e:
+                print(f"[Supabase override_triage_urgency Error] {e}")
+
+        t = self.fallback_triage.get(visit_id)
+        if t:
+            t.urgency_category = new_category
+            t.is_overridden = True
+            t.override_reason = reason
+            t.updated_at = now
+            return t
+        return None
 
     def get_visit_by_id(self, visit_id: str) -> Optional[VisitResponse]:
-        return self.visits.get(visit_id)
+        client = get_supabase_client()
+        if client:
+            try:
+                res = client.table("visits").select("*").eq("id", visit_id).execute()
+                if res.data:
+                    row = res.data[0]
+                    return VisitResponse(
+                        id=row["id"],
+                        patient_id=row["patient_id"],
+                        department_id=row["department_id"],
+                        chief_complaint=row["chief_complaint"],
+                        vital_observations=VitalObservations(**(row.get("vital_observations") or {})),
+                        status=row["status"],
+                        arrival_time=parse_iso_datetime(row["arrival_time"]),
+                        called_at=parse_iso_datetime(row["called_at"]) if row.get("called_at") else None,
+                        consultation_started_at=parse_iso_datetime(row["consultation_started_at"]) if row.get("consultation_started_at") else None,
+                        completed_at=parse_iso_datetime(row["completed_at"]) if row.get("completed_at") else None,
+                        created_at=parse_iso_datetime(row["created_at"]),
+                        updated_at=parse_iso_datetime(row.get("updated_at", row["created_at"])),
+                    )
+            except Exception as e:
+                print(f"[Supabase get_visit_by_id Error] {e}")
+
+        return self.fallback_visits.get(visit_id)
 
     def get_triage_by_visit_id(self, visit_id: str) -> Optional[TriageAssessmentResponse]:
-        return self.triage_assessments.get(visit_id)
+        client = get_supabase_client()
+        if client:
+            try:
+                res = client.table("triage_assessments").select("*").eq("visit_id", visit_id).execute()
+                if res.data:
+                    row = res.data[0]
+                    return TriageAssessmentResponse(
+                        id=row["id"],
+                        visit_id=row["visit_id"],
+                        urgency_category=row["urgency_category"],
+                        urgency_score=row["urgency_score"],
+                        rule_evidence=row.get("rule_evidence") or [],
+                        missing_vital_flags=row.get("missing_vital_flags") or [],
+                        is_overridden=row.get("is_overridden", False),
+                        override_reason=row.get("override_reason"),
+                        created_at=parse_iso_datetime(row["created_at"]),
+                        updated_at=parse_iso_datetime(row.get("updated_at", row["created_at"])),
+                    )
+            except Exception as e:
+                print(f"[Supabase get_triage_by_visit_id Error] {e}")
+
+        return self.fallback_triage.get(visit_id)
 
     def get_audit_logs(self, limit: int = 50) -> List[AuditLogResponse]:
-        return sorted(self.audit_logs, key=lambda x: x.created_at, reverse=True)[:limit]
+        client = get_supabase_client()
+        if client:
+            try:
+                res = client.table("audit_logs").select("*").order("created_at", desc=True).limit(limit).execute()
+                if res.data:
+                    return [
+                        AuditLogResponse(
+                            id=row["id"],
+                            visit_id=row.get("visit_id"),
+                            action_type=row["action_type"],
+                            previous_state=row.get("previous_state"),
+                            new_state=row.get("new_state"),
+                            reason=row.get("reason"),
+                            ip_address=row.get("ip_address"),
+                            created_at=parse_iso_datetime(row["created_at"]),
+                        )
+                        for row in res.data
+                    ]
+            except Exception as e:
+                print(f"[Supabase get_audit_logs Error] {e}")
+
+        return sorted(self.fallback_audit_logs, key=lambda x: x.created_at, reverse=True)[:limit]
 
 
-store = InMemoryDataStore()
+store = DataStore()
