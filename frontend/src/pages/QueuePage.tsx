@@ -90,7 +90,8 @@ export const QueuePage: React.FC = () => {
           res.data.uhid,
           res.data.full_name,
           '',
-          res.data.department_name || 'Consultation Room 1'
+          'Consultation Room 1',
+          res.data.department_name || 'General OPD'
         );
       }
       setTimeout(() => setCallFeedback(null), 6000);

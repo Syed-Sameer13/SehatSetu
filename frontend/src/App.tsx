@@ -8,6 +8,7 @@ import { IntakePage } from './pages/IntakePage';
 import { QueuePage } from './pages/QueuePage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { AuditPage } from './pages/AuditPage';
+import { PatientTrackerPage } from './pages/PatientTrackerPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 // Configure TanStack Query Client
@@ -30,6 +31,8 @@ export const App: React.FC = () => {
               <Route index element={<OverviewPage />} />
               <Route path="intake" element={<IntakePage />} />
               <Route path="queue" element={<QueuePage />} />
+              <Route path="tracker" element={<PatientTrackerPage />} />
+              <Route path="track" element={<PatientTrackerPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="audit" element={<AuditPage />} />
               <Route path="404" element={<NotFoundPage />} />

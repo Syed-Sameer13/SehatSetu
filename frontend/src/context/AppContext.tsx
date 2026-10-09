@@ -8,6 +8,11 @@ export interface SMSAlert {
   uhid: string;
   patientName: string;
   phone: string;
+  department?: string;
+  estimatedWaitMinutes?: number;
+  queuePosition?: number;
+  room?: string;
+  type: 'REGISTRATION' | 'CALLED' | 'STATUS_UPDATE';
   message: string;
   timestamp: string;
 }
@@ -18,7 +23,21 @@ interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   smsAlerts: SMSAlert[];
-  triggerCallAlert: (uhid: string, patientName: string, phone: string, room: string) => void;
+  triggerRegistrationAlert: (
+    uhid: string,
+    patientName: string,
+    phone: string,
+    department: string,
+    queuePosition: number,
+    waitMinutes?: number
+  ) => void;
+  triggerCallAlert: (
+    uhid: string,
+    patientName: string,
+    phone: string,
+    room: string,
+    department?: string
+  ) => void;
   dismissSmsAlert: (id: string) => void;
   t: (key: string) => string;
 }
@@ -215,6 +234,23 @@ const translations: Record<Language, Record<string, string>> = {
     role_desc_admin: 'Hospital Administration: Operational Analytics, System Config & Compliance Auditing',
     role_restricted_override: 'Clinical override is restricted to Doctor role',
     role_quick_actions: 'Role-Specific Quick Actions',
+
+    // Patient Tracker & Live Notification
+    nav_tracker: 'Live Patient Tracker',
+    tracker_title: 'Patient Live Token & Wait Time Tracker',
+    tracker_subtitle: 'Check real-time queue position, estimated waiting time, and consultation call status.',
+    tracker_search_lbl: 'Enter UHID or Scan Token:',
+    tracker_search_btn: 'Track Live Status',
+    tracker_pos_badge: 'Current Queue Position',
+    tracker_est_wait: 'Estimated Wait Time',
+    tracker_dept_room: 'Department & Counter',
+    tracker_vitals_summary: 'Triage & Vital Signs',
+    tracker_sms_preview: 'SMS & WhatsApp Notification Broadcast',
+    btn_open_tracker: 'Open Live Patient Tracker',
+    tracker_live_pulse: 'Live Server Sync Active',
+    tracker_proceed_room: 'Please proceed directly to Consultation Room now!',
+    tracker_waiting_msg: 'You are currently in the prioritised queue. We will notify you via SMS when called.',
+    tracker_completed_msg: 'Your consultation session has been successfully completed.',
   },
   hi: {
     // Navigation & App Header
@@ -407,6 +443,23 @@ const translations: Record<Language, Record<string, string>> = {
     role_desc_admin: 'अस्पताल प्रशासन: परिचालन विश्लेषण, सिस्टम सेटिंग्स और अनुपालन ऑडिट',
     role_restricted_override: 'प्राथमिकता बदलाव केवल डॉक्टर द्वारा अनुमत है',
     role_quick_actions: 'भूमिका अनुसार त्वरित कार्रवाइयां',
+
+    // Patient Tracker & Live Notification (Hindi)
+    nav_tracker: 'रोगी लाइव ट्रैकर',
+    tracker_title: 'रोगी लाइव टोकन एवं प्रतीक्षा समय ट्रैकर',
+    tracker_subtitle: 'वास्तविक समय में कतार स्थिति, अनुमानित प्रतीक्षा समय और परामर्श बुलावा स्थिति देखें।',
+    tracker_search_lbl: 'UHID टोकन दर्ज करें:',
+    tracker_search_btn: 'लाइव स्थिति देखें',
+    tracker_pos_badge: 'वर्तमान कतार स्थिति',
+    tracker_est_wait: 'अनुमानित प्रतीक्षा समय',
+    tracker_dept_room: 'विभाग एवं कक्ष',
+    tracker_vitals_summary: 'ट्राइएज एवं महत्वपूर्ण संकेत',
+    tracker_sms_preview: 'रोगी को भेजा गया एसएमएस एवं सूचना',
+    btn_open_tracker: 'लाइव रोगी ट्रैकर खोलें',
+    tracker_live_pulse: 'लाइव सर्वर सिंक सक्रिय',
+    tracker_proceed_room: 'कृपया तुरंत परामर्श कक्ष में उपस्थित हों!',
+    tracker_waiting_msg: 'आप वर्तमान में प्राथमिकता कतार में हैं। बुलाए जाने पर आपको एसएमएस प्राप्त होगा।',
+    tracker_completed_msg: 'आपका परामर्श सत्र सफलतापूर्वक संपन्न हो चुका है।',
   },
   te: {
     // Navigation & App Header (తెలుగు)
@@ -599,6 +652,23 @@ const translations: Record<Language, Record<string, string>> = {
     role_desc_admin: 'హాస్పిటల్ అడ్మినిస్ట్రేషన్: ఆపరేషనల్ అనలిటిక్స్, సిస్టమ్ సెట్టింగులు & ఆడిటింగ్',
     role_restricted_override: 'ప్రాధాన్యత మార్పు డాక్టర్ పాత్రకు మాత్రమే పరిమితం చేయబడింది',
     role_quick_actions: 'పాత్ర ఆధారిత త్వరిత చర్యలు',
+
+    // Patient Tracker & Live Notification (Telugu)
+    nav_tracker: 'లైవ్ పేషెంట్ ట్రాకర్',
+    tracker_title: 'రోగి లైవ్ టోకెన్ & నిరీక్షణ సమయం ట్రాకర్',
+    tracker_subtitle: 'రియల్-టైమ్ క్యూ స్థానం, సుమారు నిరీక్షణ సమయం మరియు కన్సల్టేషన్ కాల్ స్థితిని తనిఖీ చేయండి.',
+    tracker_search_lbl: 'UHID టోకెన్ నమోదు చేయండి:',
+    tracker_search_btn: 'లైవ్ స్థితి చూడండి',
+    tracker_pos_badge: 'ప్రస్తుత క్యూ స్థానం',
+    tracker_est_wait: 'సుమారు నిరీక్షణ సమయం',
+    tracker_dept_room: 'విభాగం & కౌంటర్',
+    tracker_vitals_summary: 'ట్రయాజ్ & ముఖ్య సూచికలు',
+    tracker_sms_preview: 'రోగికి పంపిన SMS & WhatsApp నోటిఫికేషన్',
+    btn_open_tracker: 'లైవ్ పేషెంట్ ట్రాకర్ తెరవండి',
+    tracker_live_pulse: 'లైవ్ సర్వర్ సింక్ యాక్టివ్',
+    tracker_proceed_room: 'దయచేసి వెంటనే కన్సల్టేషన్ రూమ్‌కు వెళ్లండి!',
+    tracker_waiting_msg: 'మీరు ప్రస్తుతం ప్రాధాన్యత క్యూలో ఉన్నారు. పిలిచినప్పుడు మీకు SMS అందుతుంది.',
+    tracker_completed_msg: 'మీ కన్సల్టేషన్ విజయవంతంగా పూర్తయింది.',
   },
 };
 
@@ -644,14 +714,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [language, setLanguage] = useState<Language>('en');
   const [smsAlerts, setSmsAlerts] = useState<SMSAlert[]>([]);
 
-  const triggerCallAlert = (uhid: string, patientName: string, phone: string, room: string) => {
+  const triggerRegistrationAlert = (
+    uhid: string,
+    patientName: string,
+    phone: string,
+    department: string,
+    queuePosition: number,
+    waitMinutes: number = 15
+  ) => {
     playHospitalChime();
 
-    let alertMsg = `[SehatSetu Alert] Dear ${patientName}, your token (${uhid}) has been called to ${room}. Please proceed immediately.`;
+    let alertMsg = `[SehatSetu] Dear ${patientName}, Token #${uhid} for ${department} is registered. Live Queue: #${queuePosition}. Estimated Wait: ~${waitMinutes} mins.`;
     if (language === 'hi') {
-      alertMsg = `[सेहत सेतु सूचना] प्रिय ${patientName}, आपका टोकन (${uhid}) ${room} में बुलाया गया है। कृपया तुरंत उपस्थित हों।`;
+      alertMsg = `[सेहत सेतु] प्रिय ${patientName}, आपका टोकन #${uhid} ${department} के लिए पंजीकृत है। कतार स्थिति: #${queuePosition}। अनुमानित प्रतीक्षा: ~${waitMinutes} मिनट।`;
     } else if (language === 'te') {
-      alertMsg = `[సేహత్‌సేతు అలర్ట్] గౌరవనీయ ${patientName}, మీ టోకెన్ (${uhid}) ${room} లోకి పిలవబడింది. దయచేసి వెంటనే హాజరుకాగలరు.`;
+      alertMsg = `[సేహత్‌సేతు] ప్రియమైన ${patientName}, మీ టోకెన్ #${uhid} ${department} విభాగానికి నమోదు చేయబడింది. క్యూ స్థానం: #${queuePosition}. సుమారు నిరీక్షణ: ~${waitMinutes} నిమిషాలు.`;
     }
 
     const newAlert: SMSAlert = {
@@ -659,11 +736,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       uhid,
       patientName,
       phone: phone || '+91-9876543210',
+      department,
+      queuePosition,
+      estimatedWaitMinutes: waitMinutes,
+      type: 'REGISTRATION',
       message: alertMsg,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    setSmsAlerts((prev) => [newAlert, ...prev.slice(0, 4)]);
+    setSmsAlerts((prev) => [newAlert, ...prev.slice(0, 6)]);
+  };
+
+  const triggerCallAlert = (
+    uhid: string,
+    patientName: string,
+    phone: string,
+    room: string,
+    department: string = 'OPD / ER'
+  ) => {
+    playHospitalChime();
+
+    let alertMsg = `[SehatSetu Alert] Dear ${patientName}, Token #${uhid} has been CALLED to ${department} (${room}). Please proceed immediately!`;
+    if (language === 'hi') {
+      alertMsg = `[सेहत सेतु सूचना] प्रिय ${patientName}, आपका टोकन #${uhid} ${department} (${room}) में बुलाया गया है। कृपया तुरंत उपस्थित हों!`;
+    } else if (language === 'te') {
+      alertMsg = `[సేహత్‌సేతు అలర్ట్] ప్రియమైన ${patientName}, మీ టోకెన్ #${uhid} ${department} (${room}) లోకి పిలవబడింది. దయచేసి వెంటనే హాజరుకాగలరు!`;
+    }
+
+    const newAlert: SMSAlert = {
+      id: Math.random().toString(36).substring(7),
+      uhid,
+      patientName,
+      phone: phone || '+91-9876543210',
+      department,
+      room,
+      type: 'CALLED',
+      message: alertMsg,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setSmsAlerts((prev) => [newAlert, ...prev.slice(0, 6)]);
   };
 
   const dismissSmsAlert = (id: string) => {
@@ -682,6 +794,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         language,
         setLanguage,
         smsAlerts,
+        triggerRegistrationAlert,
         triggerCallAlert,
         dismissSmsAlert,
         t,

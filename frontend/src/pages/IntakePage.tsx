@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   ArrowRight,
   RotateCcw,
+  QrCode,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -79,7 +80,7 @@ const intakeFormSchema = z.object({
 
 export const IntakePage: React.FC = () => {
   const navigate = useNavigate();
-  const { t, role } = useApp();
+  const { t, role, triggerRegistrationAlert } = useApp();
   const [successData, setSuccessData] = useState<PatientIntakeData | null>(null);
 
   // Fetch departments
@@ -135,8 +136,19 @@ export const IntakePage: React.FC = () => {
   // Submit Mutation
   const intakeMutation = useMutation({
     mutationFn: submitPatientIntake,
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       setSuccessData(res.data);
+      const deptName =
+        departments?.find((d) => d.id === variables.department_id)?.name || 'General OPD';
+      const estWait = Math.max(5, res.data.queue_position * 8);
+      triggerRegistrationAlert(
+        res.data.patient.uhid,
+        res.data.patient.full_name,
+        variables.phone_number || '',
+        deptName,
+        res.data.queue_position,
+        estWait
+      );
     },
   });
 
@@ -287,9 +299,9 @@ export const IntakePage: React.FC = () => {
       {/* Success Modal / Banner */}
       {successData && (
         <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-6 shadow-sm space-y-4 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
@@ -302,6 +314,29 @@ export const IntakePage: React.FC = () => {
             <StatusBadge type="urgency" value={successData.triage_assessment.urgency_category} />
           </div>
 
+          {/* Quick Notification & Details Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-white/80 p-3 rounded-lg border border-emerald-200 text-xs space-y-1">
+              <span className="font-bold text-slate-800">Target Department:</span>
+              <div className="text-slate-600 font-medium">
+                {departments?.find((d) => d.id === successData.visit.department_id)?.name || 'General OPD'}
+              </div>
+              <div className="text-[11px] text-blue-700 font-semibold mt-1">
+                Estimated Wait Time: ~{Math.max(5, successData.queue_position * 8)} minutes
+              </div>
+            </div>
+
+            <div className="bg-teal-50/80 p-3 rounded-lg border border-teal-200 text-xs space-y-1">
+              <div className="font-bold text-teal-900 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-teal-700" />
+                {t('tracker_sms_preview')}
+              </div>
+              <p className="text-[11px] font-mono text-teal-800 leading-snug">
+                [SehatSetu] Token #{successData.patient.uhid} registered. Live Queue: #{successData.queue_position}. Est Wait: ~{Math.max(5, successData.queue_position * 8)}m.
+              </p>
+            </div>
+          </div>
+
           <div className="bg-white/80 p-4 rounded-lg border border-emerald-200 text-xs text-slate-700 space-y-1.5">
             <div className="font-semibold text-slate-900">{t('lbl_rule_evidence')}</div>
             <ul className="list-disc list-inside space-y-0.5 text-slate-600">
@@ -311,17 +346,25 @@ export const IntakePage: React.FC = () => {
             </ul>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={() => {
                 setSuccessData(null);
                 reset();
               }}
-              className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-md transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               {t('btn_register_another')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/tracker?uhid=${successData.patient.uhid}`)}
+              className="px-4 py-2 text-xs font-bold text-teal-800 bg-teal-100 hover:bg-teal-200 border border-teal-300 rounded-md transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <QrCode className="w-3.5 h-3.5 text-teal-700" />
+              {t('btn_open_tracker')}
             </button>
             <button
               type="button"

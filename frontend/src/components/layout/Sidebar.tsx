@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   UserPlus,
   Users,
+  QrCode,
   BarChart3,
   History,
   ShieldAlert,
@@ -17,6 +18,7 @@ export const Sidebar: React.FC = () => {
     { label: t('nav_overview'), path: '/', icon: LayoutDashboard },
     { label: t('nav_intake'), path: '/intake', icon: UserPlus },
     { label: t('nav_queue'), path: '/queue', icon: Users },
+    { label: t('nav_tracker'), path: '/tracker', icon: QrCode },
     { label: t('nav_analytics'), path: '/analytics', icon: BarChart3 },
     { label: t('nav_audit'), path: '/audit', icon: History },
   ];
