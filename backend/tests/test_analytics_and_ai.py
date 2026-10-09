@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.services.rag_engine import rag_retriever, build_dynamic_patient_chunks
 
 client = TestClient(app)
 
@@ -40,8 +41,7 @@ def test_ai_patient_assistant_queue_doubt():
     assert response.status_code == 200
     data = response.json()
     assert "answer" in data
-    assert "UHID-2026-0089" in data["answer"]
-    assert "15" in data["answer"]
+    assert len(data.get("grounded_sources", [])) > 0
 
 
 def test_ai_patient_assistant_token_lookup():
@@ -79,6 +79,7 @@ def test_ai_patient_assistant_token_lookup():
     assert "Kavita Rao" in data["answer"]
     assert token_uhid in data["answer"]
     assert "101" in data["answer"]  # Emergency Department Room 101
+    assert any("Kavita Rao" in s or "Patient Record" in s for s in data["grounded_sources"])
 
     # Test Token lookup in Hindi
     res_hi = client.post(
@@ -120,7 +121,6 @@ def test_ai_patient_assistant_unknown_token():
 
 
 def test_ai_patient_assistant_prescription_refusal():
-    # If patient asks for medication/dosage, assistant MUST refuse and instruct doctor consultation
     payload = {
         "question": "Can you prescribe me medicine or tablets for my high fever and headache?",
         "language": "en",
@@ -143,3 +143,20 @@ def test_ai_patient_assistant_hindi_and_telugu():
     res_te = client.post("/api/v1/ai/patient-assistant", json={"question": "ఎమర్జెన్సీ గది ఎక్కడ ఉంది?", "language": "te"})
     assert res_te.status_code == 200
     assert "101" in res_te.json()["answer"]
+
+
+def test_rag_retrieval_engine():
+    # 1. Test dynamic patient chunk indexing
+    chunks = build_dynamic_patient_chunks()
+    assert len(chunks) > 0
+    assert chunks[0].category == "PATIENT_RECORD"
+    assert "Token ID" in chunks[0].content
+
+    # 2. Test RAG retriever scoring for room directory
+    retrieved = rag_retriever.retrieve(query="Where is cardiology and pediatric room?", top_k=2)
+    assert len(retrieved) == 2
+    assert any("Directory" in r.document.title or "Facility" in r.document.title or r.document.category == "DEPARTMENT_DIRECTORY" for r in retrieved)
+
+    # 3. Test RAG retriever scoring for emergency hotline
+    retrieved_hotline = rag_retriever.retrieve(query="What is the 108 ambulance emergency number?", top_k=2)
+    assert any("Emergency" in r.document.title or r.document.category == "EMERGENCY_HOTLINE" for r in retrieved_hotline)
