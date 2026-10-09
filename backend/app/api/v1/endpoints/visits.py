@@ -4,6 +4,7 @@ from typing import Optional
 from app.schemas.visit import VisitResponse
 from app.schemas.patient import PatientResponse
 from app.schemas.triage import TriageAssessmentResponse
+from app.schemas.queue import StatusUpdateRequest
 from app.services.storage import store
 
 router = APIRouter()
@@ -41,3 +42,19 @@ async def get_visit_details(visit_id: str):
         patient=patient,
         triage_assessment=triage,
     )
+
+
+@router.patch("/{visit_id}/status", response_model=VisitResponse, tags=["Visits"])
+async def update_visit_status(visit_id: str, req: StatusUpdateRequest):
+    """
+    Update visit clinical lifecycle status (WAITING -> CALLED -> IN_CONSULTATION -> COMPLETED / CANCELLED).
+    """
+    updated_visit = store.update_visit_status(
+        visit_id=visit_id, new_status=req.status, notes=req.notes
+    )
+    if not updated_visit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Visit with ID '{visit_id}' not found."
+        )
+    return updated_visit

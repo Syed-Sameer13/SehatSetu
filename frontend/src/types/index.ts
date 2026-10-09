@@ -78,7 +78,42 @@ export interface TriageAssessment {
   updated_at: string;
 }
 
-// Intake Request & Response
+// Dynamic Queue Entry
+export interface QueueEntry {
+  visit_id: string;
+  patient_id: string;
+  uhid: string;
+  full_name: string;
+  age: number;
+  gender: string;
+  department_id: string;
+  department_name: string;
+  urgency_category: UrgencyCategory;
+  urgency_score: number;
+  status: VisitStatus;
+  arrival_time: string;
+  waiting_duration_minutes: number;
+  calculated_priority_rank: number;
+  chief_complaint: string;
+  rule_evidence: string[];
+  vital_observations: VitalObservations;
+  is_overridden: boolean;
+  override_reason?: string;
+}
+
+// Audit Log Model
+export interface AuditLog {
+  id: string;
+  visit_id?: string;
+  action_type: string;
+  previous_state?: Record<string, unknown>;
+  new_state?: Record<string, unknown>;
+  reason?: string;
+  ip_address?: string;
+  created_at: string;
+}
+
+// Intake Payload & Response
 export interface PatientIntakePayload {
   full_name: string;
   age: number;
@@ -99,7 +134,13 @@ export interface PatientIntakeData {
   queue_position: number;
 }
 
-// Standard API Response Envelopes
+export interface CallNextResponse {
+  success: boolean;
+  data: QueueEntry | null;
+  message: string;
+}
+
+// Standard API Envelope
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
