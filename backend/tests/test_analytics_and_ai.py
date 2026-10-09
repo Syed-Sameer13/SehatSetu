@@ -44,6 +44,81 @@ def test_ai_patient_assistant_queue_doubt():
     assert "15" in data["answer"]
 
 
+def test_ai_patient_assistant_token_lookup():
+    # First, register a new patient to generate an explicit token
+    intake_res = client.post(
+        "/api/v1/patients/intake",
+        json={
+            "full_name": "Kavita Rao",
+            "age": 34,
+            "gender": "FEMALE",
+            "department_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+            "chief_complaint": "Severe acute left lower quadrant abdominal pain with fever.",
+            "vital_observations": {
+                "spo2": 98,
+                "heart_rate": 88,
+                "systolic_bp": 120,
+                "diastolic_bp": 80,
+                "temperature_f": 101.2,
+            },
+        },
+    )
+    assert intake_res.status_code in [200, 201]
+    token_uhid = intake_res.json()["data"]["patient"]["uhid"]
+
+    # Test Chatbot lookup by Token ID
+    response = client.post(
+        "/api/v1/ai/patient-assistant",
+        json={
+            "question": f"What is the status of token {token_uhid}?",
+            "language": "en",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "Kavita Rao" in data["answer"]
+    assert token_uhid in data["answer"]
+    assert "101" in data["answer"]  # Emergency Department Room 101
+
+    # Test Token lookup in Hindi
+    res_hi = client.post(
+        "/api/v1/ai/patient-assistant",
+        json={
+            "question": f"टोकन {token_uhid} की जानकारी दें",
+            "language": "hi",
+        },
+    )
+    assert res_hi.status_code == 200
+    assert "Kavita Rao" in res_hi.json()["answer"]
+    assert "रोगी टोकन विवरण" in res_hi.json()["answer"]
+
+    # Test Token lookup in Telugu
+    res_te = client.post(
+        "/api/v1/ai/patient-assistant",
+        json={
+            "question": f"టోకెన్ {token_uhid} సమాచారం ఏమిటి?",
+            "language": "te",
+        },
+    )
+    assert res_te.status_code == 200
+    assert "Kavita Rao" in res_te.json()["answer"]
+    assert "రోగి టోకెన్ వివరాలు" in res_te.json()["answer"]
+
+
+def test_ai_patient_assistant_unknown_token():
+    response = client.post(
+        "/api/v1/ai/patient-assistant",
+        json={
+            "question": "What is the status of token SS-2026-9999?",
+            "language": "en",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "not found" in data["answer"].lower()
+    assert "Registration Desk" in data["answer"] or "registration" in data["answer"].lower()
+
+
 def test_ai_patient_assistant_prescription_refusal():
     # If patient asks for medication/dosage, assistant MUST refuse and instruct doctor consultation
     payload = {
@@ -68,4 +143,3 @@ def test_ai_patient_assistant_hindi_and_telugu():
     res_te = client.post("/api/v1/ai/patient-assistant", json={"question": "ఎమర్జెన్సీ గది ఎక్కడ ఉంది?", "language": "te"})
     assert res_te.status_code == 200
     assert "101" in res_te.json()["answer"]
-

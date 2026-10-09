@@ -7,6 +7,8 @@ import {
   Sparkles,
   ShieldAlert,
   AlertTriangle,
+  Search,
+  Ticket,
 } from 'lucide-react';
 import { fetchQueue } from '../../services/queueService';
 import { aiService } from '../../services/aiService';
@@ -27,6 +29,7 @@ export const PatientAIAssistantWidget: React.FC = () => {
   const { language, setLanguage, currentUser } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [tokenInput, setTokenInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -35,11 +38,11 @@ export const PatientAIAssistantWidget: React.FC = () => {
   const { data: queue } = useQuery({
     queryKey: ['queue-assistant-live'],
     queryFn: () => fetchQueue(undefined, 'ALL'),
-    refetchInterval: 10000,
+    refetchInterval: 8000,
   });
 
   // Calculate live patient stats
-  const activeUhid = currentUser?.uhid || 'UHID-2026-0089';
+  const activeUhid = currentUser?.uhid || (queue && queue[0] ? queue[0].uhid : 'SS-2026-0001');
   const liveEntry = queue?.find((e) => e.uhid.toUpperCase() === activeUhid.toUpperCase());
   const deptQueue = queue?.filter(
     (e) => e.department_id === liveEntry?.department_id && e.status === 'WAITING'
@@ -53,10 +56,10 @@ export const PatientAIAssistantWidget: React.FC = () => {
   useEffect(() => {
     const greetingText =
       language === 'hi'
-        ? `नमस्ते ${currentUser?.name || ''}! मैं सेहत सेतु का अस्पताल सूचना सहायक हूँ। आप अपना टोकन (${activeUhid}), प्रतीक्षा समय, विभाग या अस्पताल नियमों के बारे में कोई भी प्रश्न पूछ सकते हैं।`
+        ? `नमस्ते ${currentUser?.name || ''}! मैं सेहत सेतु का आधिकारिक अस्पताल सहायक हूँ।\nआप किसी भी टोकन ID (जैसे: ${activeUhid}), प्रतीक्षा समय, डॉक्टर कक्ष या अस्पताल नियमों के बारे में पूछ सकते हैं।`
         : language === 'te'
-        ? `నమస్కారం ${currentUser?.name || ''}! నేను సేహత్‌సేతు ఆసుపత్రి సహాయకుడిని. మీ టోకెన్ (${activeUhid}), నిరీక్షణ సమయం, గదుల వివరాలు లేదా ఆసుపత్రి నిబంధనలపై ఏవైనా సందేహాలు అడగవచ్చు.`
-        : `Hello ${currentUser?.name || ''}! I am the SehatSetu Hospital Information Assistant. Ask me about your token (${activeUhid}), waiting time, departments, or hospital guidelines.`;
+        ? `నమస్కారం ${currentUser?.name || ''}! నేను సేహత్‌సేతు అధికారిక ఆసుపత్రి సహాయకుడిని.\nమీరు ఏదైనా టోకెన్ ID (ఉదా: ${activeUhid}), నిరీక్షణ సమయం, డాక్టర్ గది లేదా ఆసుపత్రి వివరాల గురించి అడగవచ్చు.`
+        : `Hello ${currentUser?.name || ''}! I am the SehatSetu Hospital Assistant.\nAsk me about any Token ID (e.g. ${activeUhid}), queue wait times, doctor rooms, or hospital guidelines.`;
 
     setMessages([
       {
@@ -64,7 +67,7 @@ export const PatientAIAssistantWidget: React.FC = () => {
         sender: 'assistant',
         text: greetingText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        sources: ['Civil Hospital Operational Guide', 'Live Queue Sync'],
+        sources: ['Hospital Live Database', 'Ward A Queue Protocols'],
       },
     ]);
   }, [language, currentUser, activeUhid]);
@@ -77,32 +80,36 @@ export const PatientAIAssistantWidget: React.FC = () => {
 
   const quickPrompts = [
     {
+      label: language === 'hi' ? `🎫 टोकन स्थिति (${activeUhid})` : language === 'te' ? `🎫 టోకెన్ స్థితి (${activeUhid})` : `🎫 Check Token (${activeUhid})`,
+      query: `What are the details and status for token ${activeUhid}?`,
+    },
+    {
       label: language === 'hi' ? '⏱️ प्रतीक्षा समय कितना है?' : language === 'te' ? '⏱️ నిరీక్షణ సమయం ఎంత?' : '⏱️ What is my wait time?',
-      query: `What is my current queue rank and estimated wait time for token ${activeUhid}?`,
+      query: `What is the queue rank and estimated wait time for token ${activeUhid}?`,
     },
     {
-      label: language === 'hi' ? '🏥 इमरजेंसी कक्ष कहाँ है?' : language === 'te' ? '🏥 ఎమర్జెన్సీ గది ఎక్కడ ఉంది?' : '🏥 Where is Emergency Room?',
-      query: 'Where is the Emergency Room located in Ward A and what are its timings?',
+      label: language === 'hi' ? '🏥 कौन सा कमरा / विभाग है?' : language === 'te' ? '🏥 ఏ గది / విభాగం?' : '🏥 Which room to go?',
+      query: `Which consultation room and floor is assigned for token ${activeUhid}?`,
     },
     {
-      label: language === 'hi' ? '⚖️ ट्राइएज प्राथमिकता कैसे तय होती है?' : language === 'te' ? '⚖️ ట్రయాజ్ ప్రాధాన్యత ఎలా నిర్ణయిస్తారు?' : '⚖️ How does triage priority work?',
+      label: language === 'hi' ? '⚖️ ट्राइएज प्राथमिकता नियम' : language === 'te' ? '⚖️ ట్రయాజ్ ప్రాధాన్యత నిబంధనలు' : '⚖️ Triage Priority Rules',
       query: 'How does SehatSetu determine patient triage priority in the queue?',
     },
     {
-      label: language === 'hi' ? '📋 कौन से दस्तावेज लाएं?' : language === 'te' ? '📋 ఏ పత్రాలు తీసుకురావాలి?' : '📋 What documents to bring?',
+      label: language === 'hi' ? '📋 कौन से दस्तावेज लाएं?' : language === 'te' ? '📋 ఏ పత్రాలు తీసుకురావాలి?' : '📋 Documents to bring',
       query: 'What documents or records should I keep ready for consultation?',
     },
     {
-      label: language === 'hi' ? '🩺 सामान्य SpO2 ऑक्सीजन क्या है?' : language === 'te' ? '🩺 సాధారణ ఆక్సిజన్ ఎంత ఉండాలి?' : '🩺 What is normal SpO2?',
-      query: 'What are normal baseline vital ranges for oxygen and pulse?',
+      label: language === 'hi' ? '🚨 24x7 इमरजेंसी नंबर' : language === 'te' ? '🚨 24x7 ఎమర్జెన్సీ నంబర్లు' : '🚨 Emergency Hotline',
+      query: 'What are the 24x7 emergency contacts and ambulance numbers?',
     },
     {
-      label: language === 'hi' ? '💊 क्या आप बुखार की दवा लिख सकते हैं?' : language === 'te' ? '💊 మీరు జ్వరానికి మందులు ఇవ్వగలరా?' : '💊 Can you prescribe medicine?',
+      label: language === 'hi' ? '💊 क्या आप दवा लिख सकते हैं?' : language === 'te' ? '💊 మీరు మందులు ఇవ్వగలరా?' : '💊 Can you prescribe medicine?',
       query: 'Can you prescribe medicine or dosage for my fever?',
     },
   ];
 
-  const handleSend = async (queryText?: string) => {
+  const handleSend = async (queryText?: string, specificToken?: string) => {
     const textToSend = (queryText || inputValue).trim();
     if (!textToSend || isLoading) return;
 
@@ -117,17 +124,19 @@ export const PatientAIAssistantWidget: React.FC = () => {
     setInputValue('');
     setIsLoading(true);
 
+    const tokenToQuery = specificToken || activeUhid;
+
     try {
       const res: PatientAssistantResponse = await aiService.askPatientAssistant({
         question: textToSend,
         language: language,
-        patient_uhid: activeUhid,
+        patient_uhid: tokenToQuery,
         patient_context: {
           queue_position: patientRank > 0 ? patientRank : 1,
           estimated_wait_minutes: liveWaitMins,
           department_name: liveEntry?.department_name || 'General Medicine',
           status: liveEntry?.status || 'WAITING',
-          uhid: activeUhid,
+          uhid: tokenToQuery,
         },
       });
 
@@ -162,6 +171,21 @@ export const PatientAIAssistantWidget: React.FC = () => {
     }
   };
 
+  const handleTokenLookupSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = tokenInput.trim();
+    if (!token) return;
+    const query =
+      language === 'hi'
+        ? `टोकन ${token} की स्थिति और जानकारी क्या है?`
+        : language === 'te'
+        ? `టోకెన్ ${token} వివరాలు మరియు స్థితి ఏమిటి?`
+        : `What are the patient details, queue status, and wait time for token ${token}?`;
+
+    setTokenInput('');
+    handleSend(query, token);
+  };
+
   return (
     <>
       {/* Floating Trigger Button */}
@@ -177,7 +201,7 @@ export const PatientAIAssistantWidget: React.FC = () => {
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full" />
           </div>
           <span>
-            {language === 'hi' ? 'AI सहायक से पूछें' : language === 'te' ? 'AI సహాయకుడిని అడగండి' : 'Ask Hospital AI'}
+            {language === 'hi' ? 'AI टोकन व अस्पताल सहायक' : language === 'te' ? 'AI టోకెన్ & ఆసుపత్రి సహాయకుడు' : 'Ask Hospital AI & Token'}
           </span>
           <Sparkles className="w-3.5 h-3.5 text-amber-300" />
         </button>
@@ -185,10 +209,10 @@ export const PatientAIAssistantWidget: React.FC = () => {
 
       {/* Slide-in Chat Drawer / Modal */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 sm:right-6 w-96 max-w-[calc(100vw-2rem)] h-[560px] max-h-[80vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col z-50 animate-in fade-in slide-in-from-bottom-5 duration-200 overflow-hidden">
+        <div className="fixed bottom-20 right-4 sm:right-6 w-[410px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col z-50 animate-in fade-in slide-in-from-bottom-5 duration-200 overflow-hidden">
           
           {/* Header */}
-          <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 text-white p-4 flex items-center justify-between flex-shrink-0">
+          <div className="bg-gradient-to-r from-teal-800 via-teal-900 to-slate-900 text-white p-3.5 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-teal-700/80 border border-teal-400/30 flex items-center justify-center text-teal-200 shadow-inner">
                 <Bot className="w-5 h-5" />
@@ -200,7 +224,11 @@ export const PatientAIAssistantWidget: React.FC = () => {
                     Grounded
                   </span>
                 </div>
-                <div className="text-[10px] text-teal-300/80">Civil Hospital • Ward A</div>
+                <div className="text-[10px] text-teal-300/80 flex items-center gap-1">
+                  <span>Civil Hospital • Ward A</span>
+                  <span className="text-teal-400">•</span>
+                  <span className="text-amber-300 font-mono font-medium">Token Lookup Ready</span>
+                </div>
               </div>
             </div>
 
@@ -236,10 +264,36 @@ export const PatientAIAssistantWidget: React.FC = () => {
             </div>
           </div>
 
+          {/* Quick Token ID Lookup Bar */}
+          <form
+            onSubmit={handleTokenLookupSubmit}
+            className="bg-teal-950/90 p-2 px-3 border-b border-teal-800 flex items-center gap-2 text-xs flex-shrink-0"
+          >
+            <div className="flex items-center gap-1.5 text-teal-200 font-semibold shrink-0 text-[11px]">
+              <Ticket className="w-3.5 h-3.5 text-amber-400" />
+              <span>{language === 'hi' ? 'टोकन खोजें:' : language === 'te' ? 'టోకెన్ శోధన:' : 'Token ID:'}</span>
+            </div>
+            <input
+              type="text"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder={language === 'hi' ? 'उदा: SS-2026-0001 या 1' : language === 'te' ? 'ఉదా: SS-2026-0001 లేదా 1' : 'e.g. SS-2026-0001 or 1'}
+              className="flex-1 px-2.5 py-1 text-[11px] bg-teal-900/80 border border-teal-700/60 rounded-lg text-white placeholder:text-teal-400/60 focus:outline-none focus:ring-1 focus:ring-amber-400 font-mono"
+            />
+            <button
+              type="submit"
+              disabled={!tokenInput.trim() || isLoading}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold text-[11px] rounded-lg transition shadow-xs cursor-pointer flex items-center gap-1"
+            >
+              <Search className="w-3 h-3" />
+              <span>{language === 'hi' ? 'देखें' : language === 'te' ? 'చూడండి' : 'Check'}</span>
+            </button>
+          </form>
+
           {/* Safety Boundary Sub-header */}
-          <div className="bg-amber-50 px-3 py-1.5 border-b border-amber-200/80 flex items-center gap-1.5 text-[10px] text-amber-900 font-medium">
+          <div className="bg-amber-50 px-3 py-1.5 border-b border-amber-200/80 flex items-center gap-1.5 text-[10px] text-amber-900 font-medium flex-shrink-0">
             <ShieldAlert className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
-            <span className="truncate">Grounded hospital information only • No medical prescriptions</span>
+            <span className="truncate">Grounded hospital & token information • Strictly no drug prescriptions</span>
           </div>
 
           {/* Messages Container */}
@@ -250,7 +304,7 @@ export const PatientAIAssistantWidget: React.FC = () => {
                 className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs whitespace-pre-wrap leading-relaxed ${
+                  className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 shadow-xs whitespace-pre-wrap leading-relaxed ${
                     m.sender === 'user'
                       ? 'bg-teal-700 text-white rounded-br-none font-medium'
                       : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
@@ -291,9 +345,9 @@ export const PatientAIAssistantWidget: React.FC = () => {
             ))}
 
             {isLoading && (
-              <div className="flex items-center gap-2 p-3 bg-white rounded-2xl border border-slate-200 max-w-[70%] text-xs text-slate-500 shadow-xs">
+              <div className="flex items-center gap-2 p-3 bg-white rounded-2xl border border-slate-200 max-w-[75%] text-xs text-slate-500 shadow-xs">
                 <Sparkles className="w-3.5 h-3.5 text-teal-600 animate-spin" />
-                <span>Searching verified hospital knowledge...</span>
+                <span>Searching verified hospital records & queue data...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -326,10 +380,10 @@ export const PatientAIAssistantWidget: React.FC = () => {
               onChange={(e) => setInputValue(e.target.value)}
               placeholder={
                 language === 'hi'
-                  ? 'अपना प्रश्न यहाँ लिखें...'
+                  ? 'टोकन या अस्पताल संबंधी प्रश्न पूछें...'
                   : language === 'te'
-                  ? 'మీ ప్రశ్నను ఇక్కడ టైప్ చేయండి...'
-                  : 'Ask about tokens, wait times, rooms...'
+                  ? 'టోకెన్ లేదా ఆసుపత్రి ప్రశ్నలను అడగండి...'
+                  : 'Ask about token status, wait time, rooms...'
               }
               className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-600 focus:bg-white text-slate-900 placeholder:text-slate-400"
             />
